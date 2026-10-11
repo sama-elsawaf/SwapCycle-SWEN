@@ -1,5 +1,7 @@
 # SwapCycle-SWEN
-#Hello world!
+A community platform where student readers exchange physical books through direct two-way swaps and three-person exchange cycles, so that everyone receives a book they actually want. 
+
+Course: SWEN360 – Software Design & Engineering Project status: Planning stage (no code written yet)
 
 ## Current Stage 
 
