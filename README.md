@@ -3,8 +3,14 @@ A community platform where student readers exchange physical books through direc
 
 Course: SWEN360 – Software Design & Engineering Project status: Planning stage (no code written yet)
 
-## Current Stage 
+# Project Vision
+Readers accumulate books they no longer use while buying others that someone nearby already owns. Direct swaps often fail because two people do not want each other's books. SwapCycle solves this by matching readers into two-way and three-way cycles. 
 
+Example: Sara offers a mystery novel, Ali offers a travel book, and Noor offers a biography. No direct swap works between any two of them, but a three-person cycle gives each reader a book they want. 
+
+SwapCycle makes matching, agreement, and handover visible to everyone involved.
+
+## Current Stage 
 We are in the **planning and design phase**.
 
 | Item | Status |
