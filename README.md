@@ -29,7 +29,26 @@ We are in the **planning and design phase**.
 5. Begin Sprint 1 (accounts, book listings, search).
 
 
+## Planned Features
 
+# Foundation Features 
+- Reader accounts with display names, meeting areas, interests, and privacy settings 
+- Physical book listings with title, author, language, edition, genre, condition, and photos 
+- Wish lists for specific titles or broader interests 
+- Search and filters by genre, language, condition, title, author, and area 
+- Direct exchange offers between two readers 
+- In-app conversations and a shared exchange page 
+- Exchange statuses, meeting arrangements, completion confirmations, and feedback 
+
+# Advanced Features 
+
+- **Two-way and three-way matching** with an explanation for every proposed match 
+- **Group acceptance and book reservations** with expiry 
+- **Availability and withdrawal recovery** with fresh consent from affected readers 
+- **Coordinated handover** with public meeting points, time polls, and recipient-specific codes 
+- **Condition checks and disputes** with evidence and moderator decisions 
+- **Discovery and reading community** with notifications, reviews, and recommendations 
+ 
 
 
 ## Planned Architecture 
