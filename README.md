@@ -28,3 +28,19 @@ We are in the **planning and design phase**.
 4. Assign tasks to team members.
 5. Begin Sprint 1 (accounts, book listings, search).
 
+
+
+
+
+## Planned Architecture 
+
+SwapCycle will be built as a modular monolith: one backend with strictly separated modules. 
+
+Key Design Decisions:
+
+1. Book descriptions are modeled separately from physical copies, so different editions and conditions match correctly. 
+2. Matching searches only cycles of length two or three and avoids duplicate proposals. 
+3. Reservations use database transactions and expiry so one copy cannot join two confirmed exchanges. 
+4. Each physical transfer is recorded separately, because handing over books cannot be atomic. 
+5. Contact and meeting details are visible only to exchange participants. 
+6. Matching is explainable, and new readers are never penalized for having no history. 
