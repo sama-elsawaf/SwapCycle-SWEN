@@ -29,9 +29,9 @@ We are in the **planning and design phase**.
 5. Begin Sprint 1 (accounts, book listings, search).
 
 
-## Planned Features
+# Planned Features
 
-# Foundation Features 
+## Foundation Features 
 - Reader accounts with display names, meeting areas, interests, and privacy settings 
 - Physical book listings with title, author, language, edition, genre, condition, and photos 
 - Wish lists for specific titles or broader interests 
@@ -40,7 +40,7 @@ We are in the **planning and design phase**.
 - In-app conversations and a shared exchange page 
 - Exchange statuses, meeting arrangements, completion confirmations, and feedback 
 
-# Advanced Features 
+## Advanced Features 
 
 - **Two-way and three-way matching** with an explanation for every proposed match 
 - **Group acceptance and book reservations** with expiry 
