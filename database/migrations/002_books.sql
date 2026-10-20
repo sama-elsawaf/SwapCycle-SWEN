@@ -1,0 +1,2 @@
+-- 002_books
+-- TODO: define tables for this migration.

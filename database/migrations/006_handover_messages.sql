@@ -1,0 +1,2 @@
+-- 006_handover_messages
+-- TODO: define tables for this migration.

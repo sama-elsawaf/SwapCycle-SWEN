@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body { @apply bg-blush font-sans text-navy; }
+  h1, h2, h3 { @apply font-display; }
+}
