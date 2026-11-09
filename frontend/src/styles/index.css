@@ -1,8 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Poppins:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  body { @apply bg-blush font-sans text-navy; }
-  h1, h2, h3 { @apply font-display; }
+  html { @apply bg-blush text-navy font-body antialiased; }
+  h1, h2, h3 { @apply font-display font-bold text-navy; }
+  :focus-visible { @apply outline-none ring-2 ring-navy ring-offset-2 ring-offset-blush; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
 }
