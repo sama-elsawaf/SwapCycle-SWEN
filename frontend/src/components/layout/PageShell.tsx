@@ -10,7 +10,7 @@ interface Props {
 
 export default function PageShell({ title, onBack, dark = false, children }: Props) {
   return (
-    <div className={`relative min-h-screen overflow-hidden ${dark ? 'bg-navy-deep text-white' : 'bg-blush text-navy'}`}>
+    <div className={`relative flex-1 overflow-hidden ${dark ? 'bg-navy-deep text-white' : 'bg-blush text-navy'}`}>
       <LeafDecoration className="absolute -top-2 -right-4 w-24 opacity-90" />
       <main className="relative mx-auto w-full max-w-md md:max-w-2xl lg:max-w-4xl px-5 py-6">
         {onBack && (
