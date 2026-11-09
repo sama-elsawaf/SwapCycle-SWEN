@@ -21,63 +21,29 @@ URL-synced search filters).
 
 Contract: `docs/api/openapi.yaml`. Schema: `database/migrations/001-003`.
 
-## Interfaces other teammates need to provide
+## Integration contract (as implemented)
 
-My code is written against these. Nothing builds or runs fully until they exist.
+All shared pieces now exist; this is how they fit together.
 
-### `backend/src/common/ApiError.h`
-
-```cpp
-namespace swapcycle::common {
-enum class ErrorCode { ValidationFailed, Unauthorized, Forbidden, NotFound, Conflict,
-                       RateLimited, PayloadTooLarge, UnsupportedMediaType, Internal };
-class ApiError : public std::runtime_error {   // what() is the reader-facing message
- public:
-  ApiError(ErrorCode code, const std::string& message);
-  ErrorCode code() const noexcept;
-};
-// { "data": data }
-drogon::HttpResponsePtr dataResponse(const Json::Value& data, drogon::HttpStatusCode status = drogon::k200OK);
-// ApiError -> its status + { "error": { code, message } } (codes as in openapi.yaml).
-// Any other exception -> log server-side, 500 INTERNAL "Something went wrong."
-drogon::HttpResponsePtr errorResponse(const std::exception& error);
-}
-```
-
-### `backend/src/middleware/AuthFilter`
-
-A Drogon `HttpFilter` registered as `AuthFilter` (global namespace). Read the
-`sc_session` cookie, verify it with
-`swapcycle::accounts::security::verifySessionToken(token, SESSION_SECRET, time(nullptr))`,
-and on success set `req->attributes()` `"userId"` (std::string) and `"role"`
-(`"READER"`/`"MODERATOR"`). Otherwise respond 401 `UNAUTHORIZED`. Controllers
-also reject requests without `userId`, so a missing filter fails closed.
-
-### Frontend `types/`, `api/`, `components/`
-
-- **types**: as in `openapi.yaml` schemas: `CurrentUser`, `PublicProfile`, `ProfileUpdate`,
-  `MeetingArea`, `PrivacySettings`, `InterestCategory`, `Genre`, `BookCondition`, `CopyStatus`,
-  `BookListing`, `BookInput`, `BookPhoto`, `Page<T>`, `SearchFilters`
-  (`q,title,author,genre,language,minCondition,areaId,page,pageSize`), `WishItem`,
-  `WishItemInput`, `WishItemKind`, all exported from `types/index.ts`.
-- **api/client.ts** must send `credentials: 'include'`, never read `localStorage`, unwrap
-  `{data}`, and throw an error with `status`, `code`, `message` (the current file reads a
-  token from `localStorage`, which breaks the security rules).
-- **api/auth.ts**: `login(email, password)`, `register({email,password,displayName})`,
-  `logout()`, `getMe()`, `requestPasswordReset(email)`, `confirmPasswordReset(token, newPassword)`,
-  `updateProfile(update)`, `getPublicProfile(userId)`, `getMeetingAreas()`.
-- **api/books.ts**: `createBook`, `getBook`, `getMyBook`, `getMyBooks(page, pageSize)`, `updateBook`,
-  `deleteBook`, `withdrawBook`, `relistBook`, `uploadPhoto(copyId, file)` (multipart field `photo`),
-  `deletePhoto(copyId, photoId)`, `searchBooks(filters)`.
-- **api/wishlist.ts**: `getWishlist`, `addWishItem`, `deleteWishItem`.
-- **components/ui**: `Button` (`variant: primary|secondary|ghost|danger`, `fullWidth`, `loading`),
-  `Input` (`label`, `hideLabel`, `icon`, `trailing`, `error`, `hint` + input props),
-  `Chip` (`label`, `icon`, `selected`, `onToggle`, `tone: light|dark`), `Card`, `Badge`
-  (`tone: neutral|success|warning|danger`).
-- **components/books**: `BookCard` (`listing`, `to`, `footer`), `BookForm` (`initial`, `areas`,
-  `submitLabel`, `serverError`, `onSubmit(input)`; can reuse `utils/validation.validateBookInput`),
-  `PhotoUploader` (`photos`, `max`, `disabled`, `onUpload(file)`, `onRemove(photoId)`).
-- **components/layout/PageShell**: wraps `children` with the nav.
+- **Errors:** `common/ApiError.h`. Throw `common::ApiError(ErrorCode, message)`, return
+  `common::dataResponse(...)` / `common::errorResponse(error)`. Codes are exactly those in `openapi.yaml`.
+- **Sessions:** the accounts module issues an HMAC-signed token in the httpOnly `sc_session` cookie.
+  `AuthFilter` verifies it with `accounts::security::verifySessionToken`, using the secret passed to
+  `AuthFilter::configure(...)` in `main.cc`, and stores `auth.userId` (UUID string) and `auth.role`
+  (`READER`/`MODERATOR`) under `kAuthUserIdKey` / `kAuthRoleKey`. Failures are 401 `UNAUTHORIZED`.
+- **Moderators:** put `RoleFilter` after `AuthFilter`; it allows only `MODERATOR` (403 `FORBIDDEN` otherwise).
+- **Exchange participants:** put `ParticipantFilter` after `AuthFilter` on `/api/exchanges/<uuid>/...`
+  routes. The exchange module must register an `ExchangeParticipantChecker` (string UUIDs) at startup.
+  Non-participants get the same 404 as a missing exchange.
+- **Configuration:** `common::loadAppConfig()` validates every variable at startup (`main.cc`).
+- **Frontend types:** `api/types.ts` mirrors the spec and `types/index.ts` re-exports it. Do not add a
+  second copy of an API type anywhere else.
+- **Frontend API:** functions in `api/auth.ts`, `api/books.ts`, `api/wishlist.ts` (see `api/README.md`).
+  Photo URLs must go through `assetUrl()`. `AuthContext` registers `setUnauthorizedHandler`, so any 401
+  logs the reader out.
+- **UI:** `components/ui` (`Button`, `Input`, `Chip`, `Card`, `Badge`, `Alert`), `components/books`
+  (`BookCard`, `BookForm`, `PhotoUploader`, `ConditionBadge`), `components/layout` (`NavBar`, `Footer`,
+  `PageShell`, `LeafDecoration`). Use only the colour tokens in `tailwind.config.ts`.
 
 ## How to run
 
@@ -107,10 +73,6 @@ Runs on every PR and on pushes to `main`:
 - **Migrations:** applies every migration (and the dev seed) to PostgreSQL 16.
 - **Backend:** builds the Docker image with `-Werror` and runs GoogleTest.
 - **Frontend:** `npm ci`, `npm audit --audit-level=high`, Vitest, typecheck and production build.
-
-The backend build and the frontend typecheck/build are skipped with a warning
-until `common/ApiError`, `middleware/AuthFilter`, `api/`, `types/` and
-`components/ui` are implemented; they start running automatically after that.
 
 ## Backend runtime
 
