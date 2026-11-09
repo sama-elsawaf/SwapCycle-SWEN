@@ -1,11 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Poppins:wght@400;500;600&display=swap');
+/* Fonts (Playfair Display, Poppins) are loaded by index.html. */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  html { @apply bg-blush text-navy font-body antialiased; }
+  html { @apply bg-blush text-navy font-sans antialiased; }
+  body { @apply bg-blush font-sans text-navy; }
   h1, h2, h3 { @apply font-display font-bold text-navy; }
   :focus-visible { @apply outline-none ring-2 ring-navy ring-offset-2 ring-offset-blush; }
   @media (prefers-reduced-motion: reduce) {

@@ -12,16 +12,13 @@ import Onboarding from './Onboarding';
 import Register from './Register';
 
 vi.mock('../../api/auth', () => ({
-  getMe: vi.fn(),
+  getCurrentUser: vi.fn(),
   login: vi.fn(),
   register: vi.fn(),
   logout: vi.fn(),
   updateProfile: vi.fn(),
-  getMeetingAreas: vi.fn(),
+  listMeetingAreas: vi.fn(),
 }));
-vi.mock('../../components/ui/Button', async () => ({ default: (await import('../../utils/testHelpers')).MockButton }));
-vi.mock('../../components/ui/Input', async () => ({ default: (await import('../../utils/testHelpers')).MockInput }));
-vi.mock('../../components/ui/Chip', async () => ({ default: (await import('../../utils/testHelpers')).MockChip }));
 
 const api = vi.mocked(authApi);
 
@@ -45,8 +42,8 @@ function renderAt(path: string, state?: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   resetMeetingAreasCache();
-  api.getMe.mockRejectedValue(apiError(401, 'UNAUTHORIZED', 'Please log in.'));
-  api.getMeetingAreas.mockResolvedValue([
+  api.getCurrentUser.mockRejectedValue(apiError(401, 'UNAUTHORIZED', 'Please log in.'));
+  api.listMeetingAreas.mockResolvedValue([
     { id: 1, name: 'Main Library' },
     { id: 2, name: 'Student Union' },
   ]);
@@ -77,7 +74,7 @@ describe('Login', () => {
     await userEvent.type(screen.getByLabelText('Password'), 'password123');
     await userEvent.click(screen.getByRole('button', { name: 'Log In' }));
     expect(await screen.findByText('my books page')).toBeInTheDocument();
-    expect(api.login).toHaveBeenCalledWith('sara@example.com', 'password123');
+    expect(api.login).toHaveBeenCalledWith({ email: 'sara@example.com', password: 'password123' });
   });
 
   it('never follows an off-site return path', async () => {
@@ -129,7 +126,7 @@ describe('Register', () => {
 
 describe('Onboarding', () => {
   it('saves interests, meeting area and privacy, then offers next steps', async () => {
-    api.getMe.mockResolvedValue(makeUser({ onboardingCompleted: false }));
+    api.getCurrentUser.mockResolvedValue(makeUser({ onboardingCompleted: false }));
     api.updateProfile.mockResolvedValue(makeUser({ onboardingCompleted: true }));
     renderAt('/onboarding');
 

@@ -80,7 +80,7 @@ export default function Onboarding() {
 
         {step === 1 && (
           <section aria-labelledby="interests-title" className="mt-10">
-            <h1 id="interests-title" className="font-display text-4xl font-bold sm:text-5xl">
+            <h1 id="interests-title" className="font-display text-4xl font-bold text-white sm:text-5xl">
               What are your interests?
             </h1>
             <p className="mt-3 text-lg">Choose a few categories to get personalized book recommendations.</p>
@@ -130,7 +130,7 @@ export default function Onboarding() {
 
         {step === 2 && (
           <section aria-labelledby="privacy-title" className="mt-10">
-            <h1 id="privacy-title" className="font-display text-4xl font-bold sm:text-5xl">
+            <h1 id="privacy-title" className="font-display text-4xl font-bold text-white sm:text-5xl">
               Your privacy
             </h1>
             <p className="mt-3 text-lg">
@@ -168,7 +168,7 @@ export default function Onboarding() {
 
         {step === 3 && (
           <section aria-labelledby="done-title" className="mt-10" role="status">
-            <h1 id="done-title" className="font-display text-4xl font-bold sm:text-5xl">
+            <h1 id="done-title" className="font-display text-4xl font-bold text-white sm:text-5xl">
               You&apos;re all set{user ? `, ${user.displayName}` : ''}!
             </h1>
             <p className="mt-3 text-lg">List a book you are ready to pass on, or see what others are offering.</p>

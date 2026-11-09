@@ -71,21 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # The modules depend on common/ApiError and middleware/AuthFilter, owned by
-      # another teammate (see docs/sprint1-handoff.md). Until they exist the build
-      # is skipped with a warning instead of failing every PR.
-      - name: Check shared backend code is ready
-        id: ready
-        run: |
-          if grep -q 'class ApiError' backend/src/common/ApiError.h \
-             && grep -q 'class AuthFilter' backend/src/middleware/AuthFilter.h; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Backend build skipped: common/ApiError.h or middleware/AuthFilter.h is not implemented yet."
-          fi
       - name: Build image (compiles with -Werror and runs GoogleTest)
-        if: steps.ready.outputs.ready == 'true'
         run: >
           docker build backend -f backend/DockerFile
           --build-arg BUILD_TYPE=Release
@@ -111,22 +97,7 @@ jobs:
         run: npm audit --audit-level=high
       - name: Unit tests (Vitest)
         run: npm test
-      # Typecheck and build need api/, types/ and components/ from other
-      # teammates (see docs/sprint1-handoff.md); skipped with a warning until then.
-      - name: Check shared frontend code is ready
-        id: ready
-        run: |
-          if grep -q "credentials: 'include'" src/api/client.ts \
-             && grep -q 'CurrentUser' src/types/index.ts \
-             && grep -q 'variant' src/components/ui/Button.tsx; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Frontend typecheck/build skipped: api/, types/ or components/ui is not implemented yet."
-          fi
       - name: Typecheck
-        if: steps.ready.outputs.ready == 'true'
         run: npm run typecheck
       - name: Production build
-        if: steps.ready.outputs.ready == 'true'
         run: npm run build

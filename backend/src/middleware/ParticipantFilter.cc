@@ -1,17 +1,19 @@
 #include "ParticipantFilter.h"
 
-#include <drogon/HttpResponse.h>
-#include <json/json.h>
 #include <trantor/utils/Logger.h>
 
-#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 
 #include "AuthFilter.h"
+#include "common/ApiError.h"
+#include "common/Uuid.h"
 
 namespace {
+
+using swapcycle::common::ApiError;
+using swapcycle::common::ErrorCode;
 
 std::mutex checkerMutex;
 std::shared_ptr<const ExchangeParticipantChecker> registeredChecker;
@@ -21,46 +23,27 @@ std::shared_ptr<const ExchangeParticipantChecker> currentChecker() {
   return registeredChecker;
 }
 
-void respondError(const drogon::FilterCallback &reject,
-                  drogon::HttpStatusCode status, const std::string &code,
-                  const std::string &message) {
-  Json::Value body;
-  body["error"]["code"] = code;
-  body["error"]["message"] = message;
-  auto resp = drogon::HttpResponse::newHttpJsonResponse(body);
-  resp->setStatusCode(status);
-  reject(resp);
+void respond(const drogon::FilterCallback &reject, ErrorCode code, const std::string &message) {
+  reject(swapcycle::common::errorResponse(ApiError(code, message)));
 }
 
+// Non-participants get the same 404 as a missing exchange, so they cannot
+// tell which exchanges exist.
 void respondNotFound(const drogon::FilterCallback &reject) {
-  respondError(reject, drogon::k404NotFound, "NOT_FOUND",
-               "Exchange not found.");
+  respond(reject, ErrorCode::NotFound, "Exchange not found.");
 }
 
-// Pulls <id> out of /api/exchanges/<id>[/...]. Digits only, so nothing odd
-// from the URL can sneak further into the app.
-std::optional<std::int64_t> exchangeIdFromPath(const std::string &path) {
+// Pulls <id> out of /api/exchanges/<id>[/...]. Only a well-formed UUID is
+// accepted, so nothing odd from the URL can reach the database.
+std::optional<std::string> exchangeIdFromPath(const std::string &path) {
   const std::string prefix = "/api/exchanges/";
   if (path.rfind(prefix, 0) != 0) {
     return std::nullopt;
   }
 
   const auto end = path.find('/', prefix.size());
-  const std::string idText = path.substr(
-      prefix.size(), end == std::string::npos ? end : end - prefix.size());
-
-  // 18 digits max so the number can never overflow an int64.
-  if (idText.empty() || idText.size() > 18) {
-    return std::nullopt;
-  }
-  for (char c : idText) {
-    if (c < '0' || c > '9') {
-      return std::nullopt;
-    }
-  }
-
-  const std::int64_t id = std::stoll(idText);
-  if (id <= 0) {
+  std::string id = path.substr(prefix.size(), end == std::string::npos ? end : end - prefix.size());
+  if (!swapcycle::common::isValidUuid(id)) {
     return std::nullopt;
   }
   return id;
@@ -81,11 +64,10 @@ void ParticipantFilter::doFilter(const drogon::HttpRequestPtr &req,
 
   // Means someone forgot to put AuthFilter in front of this one.
   if (!attributes->find(kAuthUserIdKey)) {
-    respondError(reject, drogon::k401Unauthorized, "UNAUTHENTICATED",
-                 "Please log in to continue.");
+    respond(reject, ErrorCode::Unauthorized, "Please log in to continue.");
     return;
   }
-  const std::int64_t userId = attributes->get<std::int64_t>(kAuthUserIdKey);
+  const auto userId = attributes->get<std::string>(kAuthUserIdKey);
 
   const auto exchangeId = exchangeIdFromPath(req->path());
   if (!exchangeId) {
@@ -96,16 +78,15 @@ void ParticipantFilter::doFilter(const drogon::HttpRequestPtr &req,
   const auto checker = currentChecker();
   if (!checker) {
     LOG_ERROR << "ParticipantFilter used before a checker was registered";
-    respondError(reject, drogon::k500InternalServerError, "INTERNAL_ERROR",
-                 "Something went wrong. Please try again.");
+    respond(reject, ErrorCode::Internal, "Something went wrong. Please try again.");
     return;
   }
 
   // The answer may arrive later (async DB), so the callbacks move into it.
   checker->check(
       *exchangeId, userId,
-      [reject = std::move(reject), next = std::move(next)](ParticipantCheck r) {
-        switch (r) {
+      [reject = std::move(reject), next = std::move(next)](ParticipantCheck result) {
+        switch (result) {
           case ParticipantCheck::kParticipant:
             next();
             return;
@@ -113,9 +94,7 @@ void ParticipantFilter::doFilter(const drogon::HttpRequestPtr &req,
             respondNotFound(reject);
             return;
           case ParticipantCheck::kError:
-            respondError(reject, drogon::k500InternalServerError,
-                         "INTERNAL_ERROR",
-                         "Something went wrong. Please try again.");
+            respond(reject, ErrorCode::Internal, "Something went wrong. Please try again.");
             return;
         }
       });

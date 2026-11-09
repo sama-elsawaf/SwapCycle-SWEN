@@ -5,13 +5,13 @@
 // This filter never touches the database. The Exchange module implements
 // ExchangeParticipantChecker (using its own repository/service) and registers
 // it once at startup with ParticipantFilter::setChecker(...).
-// Attach AFTER AuthFilter, on routes shaped like /api/exchanges/<id>/...
+// Attach AFTER AuthFilter, on routes shaped like /api/exchanges/<uuid>/...
 
 #include <drogon/HttpFilter.h>
 
-#include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
 
 enum class ParticipantCheck {
   kParticipant,
@@ -23,8 +23,9 @@ class ExchangeParticipantChecker {
  public:
   virtual ~ExchangeParticipantChecker() = default;
 
+  // Both ids are UUIDs (exchangeId is already validated by the filter).
   // Calls done exactly once. May call it from another thread (async DB).
-  virtual void check(std::int64_t exchangeId, std::int64_t userId,
+  virtual void check(const std::string &exchangeId, const std::string &userId,
                      std::function<void(ParticipantCheck)> done) const = 0;
 };
 

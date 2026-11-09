@@ -1,21 +1,42 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import { deleteBook, deletePhoto, getMyBook, relistBook, updateBook, uploadPhoto, withdrawBook } from '../../api/books';
-import BookForm from '../../components/books/BookForm';
-import PhotoUploader from '../../components/books/PhotoUploader';
+import {
+  deleteBook,
+  deleteBookPhoto,
+  getMyBook,
+  MAX_PHOTOS_PER_COPY,
+  relistBook,
+  updateBook,
+  uploadBookPhoto,
+  withdrawBook,
+} from '../../api/books';
+import { assetUrl } from '../../api/client';
+import BookForm, { toBookInput, type BookFormValues } from '../../components/books/BookForm';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { useAsync } from '../../hooks/useAsync';
 import { useMeetingAreas } from '../../hooks/useMeetingAreas';
-import type { BookInput, BookListing } from '../../types';
-import { LIMITS } from '../../utils/constants';
+import type { BookListing } from '../../types';
 import { errorMessage, isNotFound } from '../../utils/errors';
-import { statusLabel, statusTone } from '../../utils/format';
-import { validatePhotoFile } from '../../utils/validation';
+import { pluralize, statusLabel, statusTone } from '../../utils/format';
 import { Alert, BackLink, EmptyState, LoadingState, PageHeading } from '../PageParts';
 
-function toInput(listing: BookListing): BookInput {
+type Message = { tone: 'success' | 'error'; text: string };
+
+function initialMessage(state: unknown): Message | undefined {
+  const { created, failedPhotos = 0 } = (state as { created?: boolean; failedPhotos?: number } | null) ?? {};
+  if (!created) return undefined;
+  if (failedPhotos > 0) {
+    return {
+      tone: 'error',
+      text: `Your book is listed, but ${pluralize(failedPhotos, 'photo')} could not be uploaded. Try adding them again below.`,
+    };
+  }
+  return { tone: 'success', text: 'Your book is listed.' };
+}
+
+function formValues(listing: BookListing): Partial<BookFormValues> {
   return {
     title: listing.title,
     author: listing.author,
@@ -34,14 +55,13 @@ export default function EditBook() {
   const navigate = useNavigate();
   const { areas } = useMeetingAreas();
   const { data: listing, error, loading, setData } = useAsync(() => getMyBook(copyId), [copyId]);
-  const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | undefined>(
-    (location.state as { created?: boolean } | null)?.created
-      ? { tone: 'success', text: 'Your book is listed. Add a few photos so readers can see its condition.' }
-      : undefined,
-  );
+  const [message, setMessage] = useState<Message | undefined>(() => initialMessage(location.state));
   const [serverError, setServerError] = useState<string>();
+  const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Remounts the form after a save so the picked photos are cleared.
+  const [formVersion, setFormVersion] = useState(0);
 
   if (loading) return <LoadingState label="Loading your listing…" />;
   if (!listing) {
@@ -54,6 +74,7 @@ export default function EditBook() {
 
   // Reserved or exchanged copies are locked: they are part of an exchange.
   const editable = listing.status === 'AVAILABLE' || listing.status === 'WITHDRAWN';
+  const photoSlots = Math.max(0, MAX_PHOTOS_PER_COPY - listing.photos.length);
 
   async function run(action: () => Promise<void>, success?: string) {
     setBusy(true);
@@ -68,33 +89,42 @@ export default function EditBook() {
     }
   }
 
-  async function handleSave(input: BookInput) {
+  async function handleSave(values: BookFormValues) {
     setServerError(undefined);
+    setMessage(undefined);
+    setSaving(true);
     try {
-      setData(await updateBook(copyId, input));
-      setMessage({ tone: 'success', text: 'Changes saved.' });
+      await updateBook(copyId, toBookInput(values));
     } catch (failure) {
       setServerError(errorMessage(failure, 'We could not save your changes. Please try again.'));
+      setSaving(false);
+      return;
     }
-  }
-
-  async function handleUpload(file: File) {
-    const invalid = validatePhotoFile(file);
-    if (invalid) throw new Error(invalid);
-    const photo = await uploadPhoto(copyId, file);
-    setData((current) => (current ? { ...current, photos: [...current.photos, photo] } : current));
-  }
-
-  async function handleRemovePhoto(photoId: string) {
-    await deletePhoto(copyId, photoId);
-    setData((current) =>
-      current ? { ...current, photos: current.photos.filter((photo) => photo.id !== photoId) } : current,
+    let failedPhotos = 0;
+    for (const photo of values.photos) {
+      try {
+        await uploadBookPhoto(copyId, photo);
+      } catch {
+        failedPhotos += 1;
+      }
+    }
+    try {
+      setData(await getMyBook(copyId));
+    } catch {
+      // The save worked; a failed refresh only means stale details until reload.
+    }
+    setFormVersion((version) => version + 1);
+    setSaving(false);
+    setMessage(
+      failedPhotos > 0
+        ? { tone: 'error', text: `Changes saved, but ${pluralize(failedPhotos, 'photo')} could not be uploaded.` }
+        : { tone: 'success', text: 'Changes saved.' },
     );
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
-      <div>
+      <div className="space-y-3">
         <BackLink to="/my-books" label="Back to my books" />
         <PageHeading
           title="Edit listing"
@@ -109,30 +139,57 @@ export default function EditBook() {
 
       <section aria-labelledby="photos-title" className="rounded-card border border-soft bg-white p-5">
         <h2 id="photos-title" className="font-display text-xl font-semibold text-navy">
-          Photos
+          Current photos
         </h2>
-        <p className="mb-4 text-sm text-slate">
-          JPEG or PNG, up to 5 MB each, at most {LIMITS.photosPerBook}. Show the cover, spine and any wear.
-        </p>
-        <PhotoUploader
-          photos={listing.photos}
-          max={LIMITS.photosPerBook}
-          disabled={!editable}
-          onUpload={handleUpload}
-          onRemove={handleRemovePhoto}
-        />
+        {listing.photos.length === 0 ? (
+          <p className="mt-2 text-sm text-slate">No photos yet. Add some below so readers can see the condition.</p>
+        ) : (
+          <ul className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-5">
+            {listing.photos.map((photo, index) => (
+              <li key={photo.id} className="relative">
+                <img
+                  src={assetUrl(photo.url)}
+                  alt={`Photo ${index + 1} of ${listing.title}`}
+                  className="aspect-square w-full rounded-card border border-soft object-cover"
+                />
+                {editable && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    aria-label={`Remove photo ${index + 1}`}
+                    onClick={() =>
+                      run(async () => {
+                        await deleteBookPhoto(copyId, photo.id);
+                        setData((current) =>
+                          current ? { ...current, photos: current.photos.filter((p) => p.id !== photo.id) } : current,
+                        );
+                      }, 'Photo removed.')
+                    }
+                    className="absolute right-1 top-1 rounded-full bg-white px-2 text-sm font-semibold text-navy focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-deep"
+                  >
+                    ✕
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {editable && (
         <section aria-labelledby="details-title">
           <h2 id="details-title" className="mb-4 font-display text-xl font-semibold text-navy">
-            Details
+            Details and new photos
           </h2>
           <BookForm
-            initial={toInput(listing)}
+            key={formVersion}
+            initial={formValues(listing)}
             areas={areas}
             submitLabel="Save changes"
+            submitting={saving}
             serverError={serverError}
+            minPhotos={0}
+            maxPhotos={photoSlots}
             onSubmit={handleSave}
           />
         </section>

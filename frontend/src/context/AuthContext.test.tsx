@@ -2,12 +2,13 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as authApi from '../api/auth';
+import * as client from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import { apiError, makeUser } from '../utils/testHelpers';
 import { AuthProvider } from './AuthContext';
 
 vi.mock('../api/auth', () => ({
-  getMe: vi.fn(),
+  getCurrentUser: vi.fn(),
   login: vi.fn(),
   register: vi.fn(),
   logout: vi.fn(),
@@ -37,7 +38,7 @@ describe('AuthProvider', () => {
   });
 
   it('asks the server who is logged in on start', async () => {
-    api.getMe.mockResolvedValue(makeUser());
+    api.getCurrentUser.mockResolvedValue(makeUser());
     renderProvider();
     expect(screen.getByText('loading')).toBeInTheDocument();
     expect(await screen.findByText('authenticated')).toBeInTheDocument();
@@ -45,14 +46,14 @@ describe('AuthProvider', () => {
   });
 
   it('treats a 401 as logged out', async () => {
-    api.getMe.mockRejectedValue(apiError(401, 'UNAUTHORIZED', 'Please log in.'));
+    api.getCurrentUser.mockRejectedValue(apiError(401, 'UNAUTHORIZED', 'Please log in.'));
     renderProvider();
     expect(await screen.findByText('anonymous')).toBeInTheDocument();
     expect(latest.user).toBeNull();
   });
 
   it('logs in, updates the profile and logs out', async () => {
-    api.getMe.mockRejectedValue(apiError(401, 'UNAUTHORIZED', 'Please log in.'));
+    api.getCurrentUser.mockRejectedValue(apiError(401, 'UNAUTHORIZED', 'Please log in.'));
     api.login.mockResolvedValue(makeUser());
     api.updateProfile.mockResolvedValue(makeUser({ displayName: 'Sara K' }));
     api.logout.mockResolvedValue(undefined);
@@ -60,7 +61,7 @@ describe('AuthProvider', () => {
     await screen.findByText('anonymous');
 
     await act(() => latest.login('sara@example.com', 'password123'));
-    expect(api.login).toHaveBeenCalledWith('sara@example.com', 'password123');
+    expect(api.login).toHaveBeenCalledWith({ email: 'sara@example.com', password: 'password123' });
     expect(latest.status).toBe('authenticated');
 
     await act(() => latest.updateProfile({ displayName: 'Sara K' }));
@@ -71,7 +72,7 @@ describe('AuthProvider', () => {
   });
 
   it('logs out locally even if the server call fails', async () => {
-    api.getMe.mockResolvedValue(makeUser());
+    api.getCurrentUser.mockResolvedValue(makeUser());
     api.logout.mockRejectedValue(new TypeError('Failed to fetch'));
     renderProvider();
     await screen.findByText('authenticated');
@@ -81,8 +82,21 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(latest.status).toBe('anonymous'));
   });
 
+  it('logs out when any request finds the session expired', async () => {
+    api.getCurrentUser.mockResolvedValue(makeUser());
+    const handlers: Array<(() => void) | null> = [];
+    const spy = vi.spyOn(client, 'setUnauthorizedHandler').mockImplementation((handler) => {
+      handlers.push(handler);
+    });
+    renderProvider();
+    await screen.findByText('authenticated');
+    act(() => handlers.find(Boolean)?.());
+    expect(latest.status).toBe('anonymous');
+    spy.mockRestore();
+  });
+
   it('never stores session data in browser storage', async () => {
-    api.getMe.mockResolvedValue(makeUser());
+    api.getCurrentUser.mockResolvedValue(makeUser());
     api.login.mockResolvedValue(makeUser());
     renderProvider();
     await screen.findByText('authenticated');

@@ -1,4 +1,4 @@
-import { getMeetingAreas } from '../api/auth';
+import { listMeetingAreas } from '../api/auth';
 import type { MeetingArea } from '../types';
 import { useAsync } from './useAsync';
 
@@ -6,10 +6,12 @@ import { useAsync } from './useAsync';
 let cached: Promise<MeetingArea[]> | undefined;
 
 function loadAreas(): Promise<MeetingArea[]> {
-  cached ??= getMeetingAreas().catch((error: unknown) => {
-    cached = undefined;
-    throw error;
-  });
+  if (!cached) {
+    cached = listMeetingAreas().catch((error: unknown) => {
+      cached = undefined;
+      throw error;
+    });
+  }
   return cached;
 }
 

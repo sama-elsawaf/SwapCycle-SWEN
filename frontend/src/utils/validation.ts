@@ -1,4 +1,4 @@
-import type { BookInput, WishItemInput } from '../types';
+import type { BookInput, WishItemKind } from '../types';
 import { CONDITIONS, GENRES, LIMITS } from './constants';
 
 // Client-side checks mirror the server rules so readers get instant feedback.
@@ -46,10 +46,10 @@ export function validateBookInput(input: BookInput): FieldErrors<BookInput> {
   else if (length(input.author) > LIMITS.authorMax) {
     errors.author = `Author must be at most ${LIMITS.authorMax} characters.`;
   }
-  if (length(input.edition) > LIMITS.editionMax) {
+  if (length(input.edition ?? '') > LIMITS.editionMax) {
     errors.edition = `Edition must be at most ${LIMITS.editionMax} characters.`;
   }
-  if (length(input.conditionNotes) > LIMITS.conditionNotesMax) {
+  if (length(input.conditionNotes ?? '') > LIMITS.conditionNotesMax) {
     errors.conditionNotes = `Condition notes must be at most ${LIMITS.conditionNotesMax} characters.`;
   }
   if (!isLanguageCode(input.language)) errors.language = 'Choose a language.';
@@ -58,8 +58,19 @@ export function validateBookInput(input: BookInput): FieldErrors<BookInput> {
   return errors;
 }
 
-export function validateWishItem(input: WishItemInput): FieldErrors<WishItemInput> {
-  const errors: FieldErrors<WishItemInput> = {};
+/** A wish list entry as typed into the form, before it becomes a WishItemInput. */
+export interface WishItemDraft {
+  kind: WishItemKind;
+  title?: string;
+  author?: string;
+  genre?: string;
+  language?: string | null;
+}
+
+export type WishItemErrors = Partial<Record<'title' | 'author' | 'genre' | 'language', string>>;
+
+export function validateWishItem(input: WishItemDraft): WishItemErrors {
+  const errors: WishItemErrors = {};
   if (input.kind === 'TITLE') {
     const title = input.title ?? '';
     if (length(title) < 1) errors.title = 'Enter the title you are looking for.';
@@ -67,14 +78,14 @@ export function validateWishItem(input: WishItemInput): FieldErrors<WishItemInpu
     if (input.author && length(input.author) > LIMITS.authorMax) {
       errors.author = `Author must be at most ${LIMITS.authorMax} characters.`;
     }
-  } else if (!input.genre) {
+  } else if (!input.genre || !GENRES.some((genre) => genre.value === input.genre)) {
     errors.genre = 'Choose a genre.';
   }
   if (input.language && !isLanguageCode(input.language)) errors.language = 'Choose a language.';
   return errors;
 }
 
-export function hasErrors<T>(errors: FieldErrors<T>): boolean {
+export function hasErrors(errors: object): boolean {
   return Object.values(errors).some(Boolean);
 }
 

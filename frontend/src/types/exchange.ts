@@ -1,5 +1,7 @@
-import type { BookCopy } from './book';
-import type { PublicUser } from './user';
+import type { BookListing, OwnerSummary } from '../api/types';
+
+// Draft types for exchanges. openapi.yaml has no exchange endpoints yet; when
+// the exchange module adds them, move these into api/types.ts to match the spec.
 
 export type ExchangeStatus =
   | 'PROPOSED'
@@ -15,9 +17,9 @@ export type ParticipantResponse = 'PENDING' | 'ACCEPTED' | 'REJECTED';
 
 /** One reader's side of an exchange: gives one copy, receives another. */
 export interface ExchangeParticipant {
-  user: PublicUser;
-  gives: BookCopy;
-  receives: BookCopy;
+  user: OwnerSummary;
+  gives: BookListing;
+  receives: BookListing;
   response: ParticipantResponse;
   transferred: boolean;
 }

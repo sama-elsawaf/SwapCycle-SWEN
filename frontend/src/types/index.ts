@@ -1,15 +1,5 @@
-export * from './user';
-export * from './book';
+// One set of types for the whole app. The API contract types live in
+// api/types.ts (mirrors docs/api/openapi.yaml); this folder re-exports them
+// and adds types for features that have no endpoints yet.
+export * from '../api/types';
 export * from './exchange';
-
-export interface ApiError {
-  code: string;
-  message: string;
-}
-
-export interface Paginated<T> {
-  items: T[];
-  page: number;
-  pageSize: number;
-  total: number;
-}

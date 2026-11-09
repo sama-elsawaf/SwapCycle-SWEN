@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 
+import { assetUrl } from '../../api/client';
 import Badge from '../../components/ui/Badge';
 import { useAuth } from '../../hooks/useAuth';
 import { useBook } from '../../hooks/useBooks';
@@ -40,7 +41,7 @@ export default function BookDetails() {
               {book.photos.map((photo, index) => (
                 <li key={photo.id} className={index === 0 ? 'col-span-2' : ''}>
                   <img
-                    src={photo.url}
+                    src={assetUrl(photo.url)}
                     alt={`Photo ${index + 1} of ${book.photos.length} of ${book.title}`}
                     loading="lazy"
                     className="aspect-[4/3] w-full rounded-card border border-soft object-cover"

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import * as authApi from '../api/auth';
+import { setUnauthorizedHandler } from '../api/client';
 import type { CurrentUser, ProfileUpdate } from '../types';
 import { isUnauthorized } from '../utils/errors';
 
@@ -39,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      signedIn(await authApi.getMe());
+      signedIn(await authApi.getCurrentUser());
     } catch (error) {
       // A 401 just means "not logged in". Other failures also leave the
       // reader logged out locally; protected pages will ask them to log in.
@@ -52,8 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  // Any request that finds the session expired logs the reader out here too.
+  useEffect(() => {
+    setUnauthorizedHandler(signedOut);
+    return () => setUnauthorizedHandler(null);
+  }, [signedOut]);
+
   const login = useCallback(
-    async (email: string, password: string) => signedIn(await authApi.login(email, password)),
+    async (email: string, password: string) => signedIn(await authApi.login({ email, password })),
     [signedIn],
   );
 

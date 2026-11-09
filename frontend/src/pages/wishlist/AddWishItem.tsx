@@ -7,15 +7,15 @@ import Input from '../../components/ui/Input';
 import type { BookCondition, Genre, WishItemInput, WishItemKind } from '../../types';
 import { CONDITIONS, GENRES, LANGUAGES, LIMITS } from '../../utils/constants';
 import { errorMessage } from '../../utils/errors';
-import { hasErrors, validateWishItem, type FieldErrors } from '../../utils/validation';
+import { hasErrors, validateWishItem, type WishItemErrors } from '../../utils/validation';
 import { Alert, BackLink, PageHeading, SelectField } from '../PageParts';
 
-/** Only the fields that belong to the chosen kind are sent. */
+/** Only the fields that belong to the chosen kind are sent. Call after validation. */
 function toInput(kind: WishItemKind, form: FormState): WishItemInput {
   const shared = { language: form.language || null, minCondition: form.minCondition || null };
   return kind === 'TITLE'
     ? { kind, title: form.title.trim(), author: form.author.trim() || undefined, ...shared }
-    : { kind, genre: form.genre || undefined, ...shared };
+    : { kind, genre: form.genre as Genre, ...shared };
 }
 
 interface FormState {
@@ -30,17 +30,17 @@ export default function AddWishItem() {
   const navigate = useNavigate();
   const [kind, setKind] = useState<WishItemKind>('TITLE');
   const [form, setForm] = useState<FormState>({ title: '', author: '', genre: '', language: '', minCondition: '' });
-  const [errors, setErrors] = useState<FieldErrors<WishItemInput>>({});
+  const [errors, setErrors] = useState<WishItemErrors>({});
   const [formError, setFormError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const input = toInput(kind, form);
-    const next = validateWishItem(input);
+    const next = validateWishItem({ kind, ...form });
     setErrors(next);
     setFormError(undefined);
     if (hasErrors(next)) return;
+    const input = toInput(kind, form);
 
     setSubmitting(true);
     try {

@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "common/ApiError.h"
+#include "middleware/AuthFilter.h"
 
 namespace swapcycle::accounts {
 
@@ -30,8 +31,8 @@ std::string stringField(const Json::Value& body, const char* field) {
 // Set by AuthFilter after it verifies the session cookie.
 std::string currentUserId(const HttpRequestPtr& req) {
     const auto& attributes = req->attributes();
-    if (!attributes->find("userId")) throw ApiError(ErrorCode::Unauthorized, "Please log in.");
-    return attributes->get<std::string>("userId");
+    if (!attributes->find(kAuthUserIdKey)) throw ApiError(ErrorCode::Unauthorized, "Please log in.");
+    return attributes->get<std::string>(kAuthUserIdKey);
 }
 
 void enforceLimit(RateLimiter& limiter, const std::string& key) {

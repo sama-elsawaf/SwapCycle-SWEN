@@ -1,5 +1,7 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
+import Footer from './components/layout/Footer';
+import NavBar from './components/layout/NavBar';
 import PageShell from './components/layout/PageShell';
 import { useAuth } from './hooks/useAuth';
 import Login from './pages/auth/Login';
@@ -39,9 +41,13 @@ function GuestOnly() {
 
 function WithShell() {
   return (
-    <PageShell>
-      <Outlet />
-    </PageShell>
+    <div className="flex min-h-screen flex-col">
+      <NavBar />
+      <PageShell>
+        <Outlet />
+      </PageShell>
+      <Footer />
+    </div>
   );
 }
 

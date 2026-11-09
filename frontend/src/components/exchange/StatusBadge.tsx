@@ -7,8 +7,8 @@ const tone: Record<ExchangeStatus, string> = {
   COMPLETED: 'text-success border-success',
   PARTIALLY_COMPLETED: 'text-navy border-warning',
   REJECTED: 'text-danger border-danger',
-  EXPIRED: 'text-slate-navy border-line',
-  CANCELLED: 'text-slate-navy border-line',
+  EXPIRED: 'text-slate border-soft',
+  CANCELLED: 'text-slate border-soft',
   DISPUTED: 'text-danger border-danger',
 };
 

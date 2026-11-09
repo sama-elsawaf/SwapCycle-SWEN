@@ -1,9 +1,9 @@
-import { getBook, getMyBooks, searchBooks } from '../api/books';
-import type { SearchFilters } from '../types';
+import { getBook, listMyBooks, searchBooks } from '../api/books';
+import type { BookSearchParams } from '../types';
 import { LIMITS } from '../utils/constants';
 import { useAsync } from './useAsync';
 
-export function useBookSearch(filters: SearchFilters) {
+export function useBookSearch(filters: BookSearchParams) {
   const key = JSON.stringify(filters);
   return useAsync(() => searchBooks({ pageSize: LIMITS.pageSize, ...filters }), [key]);
 }
@@ -13,5 +13,5 @@ export function useBook(copyId: string | undefined) {
 }
 
 export function useMyBooks(page: number) {
-  return useAsync(() => getMyBooks(page, LIMITS.pageSize), [page]);
+  return useAsync(() => listMyBooks({ page, pageSize: LIMITS.pageSize }), [page]);
 }
