@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "common/ApiError.h"
+#include "middleware/AuthFilter.h"
 
 namespace swapcycle::wishlist_search {
 
@@ -16,8 +17,8 @@ using drogon::HttpResponsePtr;
 // Set by AuthFilter after it verifies the session cookie.
 std::string currentUserId(const HttpRequestPtr& req) {
     const auto& attributes = req->attributes();
-    if (!attributes->find("userId")) throw ApiError(ErrorCode::Unauthorized, "Please log in.");
-    return attributes->get<std::string>("userId");
+    if (!attributes->find(kAuthUserIdKey)) throw ApiError(ErrorCode::Unauthorized, "Please log in.");
+    return attributes->get<std::string>(kAuthUserIdKey);
 }
 
 catalog::SearchFilters filtersFrom(const HttpRequestPtr& req) {

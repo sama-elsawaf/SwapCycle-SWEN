@@ -4,6 +4,7 @@
 
 #include <drogon/drogon.h>
 
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -11,6 +12,8 @@
 #include <string>
 
 #include "common/ApiError.h"
+#include "common/Config.h"
+#include "middleware/AuthFilter.h"
 #include "modules/accounts/AccountController.h"
 #include "modules/accounts/AccountSecurity.h"
 #include "modules/catalog/CatalogController.h"
@@ -19,20 +22,6 @@
 namespace {
 
 using namespace swapcycle;
-
-std::string env(const char* name, const std::string& fallback = "") {
-    const char* value = std::getenv(name);
-    return value && *value ? std::string(value) : fallback;
-}
-
-std::string requiredEnv(const char* name) {
-    auto value = env(name);
-    if (value.empty()) {
-        std::cerr << "Missing required environment variable " << name << " (see .env.example)\n";
-        std::exit(EXIT_FAILURE);
-    }
-    return value;
-}
 
 void addCorsHeaders(const drogon::HttpRequestPtr& req, const drogon::HttpResponsePtr& resp,
                     const std::string& allowedOrigin) {
@@ -76,41 +65,45 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    accounts::AccountSettings accountSettings;
-    accountSettings.sessionSecret = requiredEnv("SESSION_SECRET");
-    if (accountSettings.sessionSecret.size() < 32) {
-        std::cerr << "SESSION_SECRET must be at least 32 characters\n";
+    // Reads and checks every setting at once; never prints secret values.
+    common::AppConfig config;
+    try {
+        config = common::loadAppConfig();
+    } catch (const common::ConfigError& error) {
+        std::cerr << error.what() << "\n(see .env.example)\n";
         return EXIT_FAILURE;
     }
-    accounts::SessionCookieSettings cookie;
-    cookie.secure = env("COOKIE_SECURE", "true") != "false";
 
-    const auto db = drogon::orm::DbClient::newPgClient(requiredEnv("DATABASE_URL"),
-                                                       std::stoi(env("DB_POOL_SIZE", "8")));
+    accounts::AccountSettings accountSettings;
+    accountSettings.sessionSecret = config.sessionSecret;
+    accounts::SessionCookieSettings cookie;
+    cookie.secure = config.cookieSecure;
+    // The filter verifies exactly the tokens and cookie the accounts module issues.
+    AuthFilter::configure(config.sessionSecret, cookie.name);
+
+    const auto db = drogon::orm::DbClient::newPgClient(config.databaseUrl, static_cast<size_t>(config.dbPoolSize));
 
     auto accountService = std::make_shared<accounts::AccountService>(
         std::make_shared<accounts::PostgresAccountRepository>(db), accountSettings);
     auto catalogService = std::make_shared<catalog::CatalogService>(
         std::make_shared<catalog::PostgresCatalogRepository>(db),
-        std::make_shared<catalog::FilePhotoStore>(env("UPLOAD_DIR", "/var/lib/swapcycle/uploads") + "/books"),
-        accountService);
+        std::make_shared<catalog::FilePhotoStore>(config.uploadDir + "/books"), accountService);
     auto wishlistService = std::make_shared<wishlist_search::WishlistSearchService>(
         std::make_shared<wishlist_search::PostgresWishlistSearchRepository>(db), catalogService);
 
     auto& app = drogon::app();
-    const auto configPath = env("DROGON_CONFIG", "config.json");
-    if (std::filesystem::exists(configPath)) {
-        app.loadConfigFile(configPath);
+    if (std::filesystem::exists(config.drogonConfig)) {
+        app.loadConfigFile(config.drogonConfig);
     } else {
-        std::cerr << "Config file " << configPath << " not found; using Drogon defaults\n";
+        std::cerr << "Config file " << config.drogonConfig << " not found; using Drogon defaults\n";
     }
     app.registerController(std::make_shared<accounts::AccountController>(accountService, cookie));
     app.registerController(std::make_shared<catalog::CatalogController>(catalogService));
     app.registerController(std::make_shared<wishlist_search::WishlistSearchController>(wishlistService));
 
-    installHttpPolicy(env("FRONTEND_ORIGIN"));
+    installHttpPolicy(config.frontendOrigin);
 
     // Threads, body-size limits, logging and static-file policy come from config.json.
-    app.addListener("0.0.0.0", static_cast<uint16_t>(std::stoi(env("PORT", "8080")))).run();
+    app.addListener("0.0.0.0", static_cast<uint16_t>(config.port)).run();
     return EXIT_SUCCESS;
 }
