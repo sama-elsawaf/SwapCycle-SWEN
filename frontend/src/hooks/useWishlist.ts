@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
 
-import { addWishItem, deleteWishItem, getWishlist } from '../api/wishlist';
+import { addWishItem, listWishItems, removeWishItem } from '../api/wishlist';
 import type { WishItem, WishItemInput } from '../types';
 import { useAsync } from './useAsync';
 
 export function useWishlist() {
-  const { data, error, loading, reload, setData } = useAsync(getWishlist, []);
+  const { data, error, loading, reload, setData } = useAsync(listWishItems, []);
   const items = data ?? [];
 
   const add = useCallback(
@@ -19,7 +19,7 @@ export function useWishlist() {
 
   const remove = useCallback(
     async (id: string): Promise<void> => {
-      await deleteWishItem(id);
+      await removeWishItem(id);
       setData((current) => (current ?? []).filter((item) => item.id !== id));
     },
     [setData],

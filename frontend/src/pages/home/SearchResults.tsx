@@ -6,7 +6,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import { useBookSearch } from '../../hooks/useBooks';
 import { useMeetingAreas } from '../../hooks/useMeetingAreas';
-import type { BookCondition, Genre, SearchFilters } from '../../types';
+import type { BookCondition, Genre, BookSearchParams } from '../../types';
 import { CONDITIONS, GENRES, LANGUAGES, LIMITS } from '../../utils/constants';
 import { errorMessage } from '../../utils/errors';
 import { pluralize } from '../../utils/format';
@@ -16,14 +16,14 @@ import { Alert, EmptyState, LoadingState, PageHeading, Pagination, SelectField }
 export default function SearchResults() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
-  const [draft, setDraft] = useState<SearchFilters>(filters);
+  const [draft, setDraft] = useState<BookSearchParams>(filters);
   const { areas } = useMeetingAreas();
   const results = useBookSearch(filters);
 
   // Keep the form in step with back/forward navigation.
   useEffect(() => setDraft(filters), [filters]);
 
-  function apply(next: SearchFilters) {
+  function apply(next: BookSearchParams) {
     setSearchParams(paramsFromFilters({ ...next, page: undefined }));
   }
 

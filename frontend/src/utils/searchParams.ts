@@ -1,4 +1,4 @@
-import type { BookCondition, Genre, SearchFilters } from '../types';
+import type { BookCondition, Genre, BookSearchParams } from '../types';
 import { CONDITIONS, GENRES, LIMITS } from './constants';
 import { isLanguageCode } from './validation';
 
@@ -16,7 +16,7 @@ function text(value: string | null): string | undefined {
   return trimmed ? trimmed.slice(0, LIMITS.searchMax) : undefined;
 }
 
-export function filtersFromParams(params: URLSearchParams): SearchFilters {
+export function filtersFromParams(params: URLSearchParams): BookSearchParams {
   const genre = params.get('genre');
   const minCondition = params.get('minCondition');
   const language = params.get('language');
@@ -33,7 +33,7 @@ export function filtersFromParams(params: URLSearchParams): SearchFilters {
   };
 }
 
-export function paramsFromFilters(filters: SearchFilters): URLSearchParams {
+export function paramsFromFilters(filters: BookSearchParams): URLSearchParams {
   const params = new URLSearchParams();
   const entries: Array<[string, string | number | undefined]> = [
     ['q', filters.q],

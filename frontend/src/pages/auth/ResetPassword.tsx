@@ -110,7 +110,7 @@ function ChooseNewPassword({ token }: { token: string }) {
 
     setSubmitting(true);
     try {
-      await confirmPasswordReset(token, password);
+      await confirmPasswordReset({ token, newPassword: password });
       setDone(true);
     } catch (error) {
       setFormError(errorMessage(error, 'This reset link is invalid or has expired.'));
