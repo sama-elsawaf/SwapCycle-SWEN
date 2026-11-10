@@ -133,14 +133,19 @@ describe('Search memory', () => {
     saveFilters({ genre: 'MYSTERY', minCondition: 'GOOD' });
     renderAt('/search');
     expect(await screen.findByText(/filters you used last time/)).toBeInTheDocument();
-    expect(screen.getByLabelText('current url')).toHaveTextContent('/search?genre=MYSTERY&minCondition=GOOD');
+    // React Router applies URL changes as a transition, so they can land a moment after the note.
+    await waitFor(() =>
+      expect(screen.getByLabelText('current url')).toHaveTextContent('/search?genre=MYSTERY&minCondition=GOOD'),
+    );
     await waitFor(() =>
       expect(books.searchBooks).toHaveBeenLastCalledWith(expect.objectContaining({ genre: 'MYSTERY' })),
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-    expect(screen.getByLabelText('current url')).toHaveTextContent(/^\/search$/);
-    expect(localStorage.getItem('swapcycle:v1:search-filters')).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByLabelText('current url')).toHaveTextContent(/^\/search$/);
+      expect(localStorage.getItem('swapcycle:v1:search-filters')).toBeNull();
+    });
   });
 
   it('leaves links that already carry filters alone', async () => {
