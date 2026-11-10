@@ -46,6 +46,7 @@ struct User {
     std::vector<std::string> interests;
     bool onboardingCompleted = false;
     std::string createdAt;  // ISO-8601 UTC.
+    std::int64_t sessionVersion = 1;  // users.session_version; never serialised.
 };
 
 struct NewUser {
@@ -79,10 +80,20 @@ struct ProfileUpdate {
     std::optional<bool> onboardingCompleted;
 };
 
+// A raised users.session_version: every older session of userId has ended.
+struct SessionRevocation {
+    std::string userId;
+    std::int64_t newVersion = 0;
+};
+
 struct SessionClaims {
     std::string userId;
     Role role = Role::Reader;
     std::int64_t expiresAt = 0;  // Unix seconds.
+    // users.session_version when the token was issued. Raising the stored
+    // version ends the session. Empty only for legacy "v1" tokens issued
+    // before revocation existed; those are accepted until they expire.
+    std::optional<std::int64_t> sessionVersion;
 };
 
 PublicProfile toPublicProfile(const User& user);

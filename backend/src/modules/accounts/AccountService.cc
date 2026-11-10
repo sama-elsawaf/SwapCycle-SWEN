@@ -98,7 +98,8 @@ AccountService::AccountService(std::shared_ptr<AccountRepository> repository, Ac
     : repository_(std::move(repository)),
       settings_(std::move(settings)),
       resetSender_(std::move(resetSender)),
-      dummyPasswordHash_(security::hashPassword(security::randomToken())) {}
+      dummyPasswordHash_(security::hashPassword(security::randomToken())),
+      sessionVersions_(std::make_shared<SessionVersionCache>(settings_.sessionVersionCacheTtl)) {}
 
 std::string AccountService::normaliseEmail(std::string_view email) {
     auto normalised = trim(email);
@@ -109,7 +110,8 @@ std::string AccountService::normaliseEmail(std::string_view email) {
 
 Session AccountService::startSession(User user) const {
     const auto expiresAt = static_cast<std::int64_t>(std::time(nullptr)) + settings_.sessionTtl.count();
-    auto token = security::issueSessionToken({user.id, user.role, expiresAt}, settings_.sessionSecret);
+    auto token = security::issueSessionToken({user.id, user.role, expiresAt, user.sessionVersion},
+                                             settings_.sessionSecret);
     return Session{std::move(user), std::move(token), settings_.sessionTtl};
 }
 
@@ -202,13 +204,30 @@ drogon::Task<void> AccountService::confirmPasswordReset(std::string token, std::
     if (token.size() < 20 || token.size() > 128) invalid("This reset link is invalid or has expired.");
     validatePassword(newPassword);
 
-    const bool changed = co_await repository_->consumeResetTokenAndSetPassword(security::sha256Hex(token),
+    const auto revoked = co_await repository_->consumeResetTokenAndSetPassword(security::sha256Hex(token),
                                                                               security::hashPassword(newPassword));
-    if (!changed) invalid("This reset link is invalid or has expired.");
+    if (!revoked) invalid("This reset link is invalid or has expired.");
+    sessionVersions_->put(revoked->userId, revoked->newVersion);
+}
+
+drogon::Task<void> AccountService::logout(std::string token) {
+    const auto claims = verifySession(token);
+    // Legacy v1 tokens carry no version; they simply expire.
+    if (!claims || !claims->sessionVersion) co_return;
+    const auto revoked = co_await repository_->revokeSessions(claims->userId, *claims->sessionVersion);
+    if (revoked) sessionVersions_->put(revoked->userId, revoked->newVersion);
 }
 
 std::optional<SessionClaims> AccountService::verifySession(std::string_view token) const {
     return security::verifySessionToken(token, settings_.sessionSecret, static_cast<std::int64_t>(std::time(nullptr)));
+}
+
+drogon::Task<bool> AccountService::isSessionCurrent(std::string userId, std::int64_t sessionVersion) {
+    if (const auto cached = sessionVersions_->get(userId)) co_return *cached == sessionVersion;
+    const auto stored = co_await repository_->findSessionVersion(userId);
+    if (!stored) co_return false;  // The account no longer exists.
+    // put() keeps whichever is newer: this lookup or a revocation that finished meanwhile.
+    co_return sessionVersions_->put(userId, *stored) == sessionVersion;
 }
 
 }  // namespace swapcycle::accounts

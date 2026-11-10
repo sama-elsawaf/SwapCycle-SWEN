@@ -36,10 +36,20 @@ public:
                                                 std::chrono::seconds ttl) = 0;
 
     // In one transaction: marks the token used if it is unused and unexpired,
-    // invalidates the user's other reset tokens and stores the new hash.
-    // Returns false if the token was not valid.
-    virtual drogon::Task<bool> consumeResetTokenAndSetPassword(std::string tokenHash,
-                                                               std::string newPasswordHash) = 0;
+    // invalidates the user's other reset tokens, stores the new hash and
+    // raises the session version (ending every existing session).
+    // Returns nullopt if the token was not valid.
+    virtual drogon::Task<std::optional<SessionRevocation>> consumeResetTokenAndSetPassword(
+        std::string tokenHash, std::string newPasswordHash) = 0;
+
+    // users.session_version, or nullopt if the user does not exist.
+    virtual drogon::Task<std::optional<std::int64_t>> findSessionVersion(std::string userId) = 0;
+
+    // Raises the session version only if it still equals expectedVersion, so
+    // a token that is already revoked cannot end newer sessions.
+    // Returns nullopt if nothing changed.
+    virtual drogon::Task<std::optional<SessionRevocation>> revokeSessions(std::string userId,
+                                                                          std::int64_t expectedVersion) = 0;
 };
 
 class PostgresAccountRepository final : public AccountRepository {
@@ -54,8 +64,11 @@ public:
     drogon::Task<std::vector<MeetingArea>> listMeetingAreas() override;
     drogon::Task<void> insertResetToken(std::string userId, std::string tokenHash,
                                         std::chrono::seconds ttl) override;
-    drogon::Task<bool> consumeResetTokenAndSetPassword(std::string tokenHash,
-                                                       std::string newPasswordHash) override;
+    drogon::Task<std::optional<SessionRevocation>> consumeResetTokenAndSetPassword(
+        std::string tokenHash, std::string newPasswordHash) override;
+    drogon::Task<std::optional<std::int64_t>> findSessionVersion(std::string userId) override;
+    drogon::Task<std::optional<SessionRevocation>> revokeSessions(std::string userId,
+                                                                  std::int64_t expectedVersion) override;
 
 private:
     drogon::orm::DbClientPtr db_;

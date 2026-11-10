@@ -162,5 +162,105 @@ TEST_F(AccountServiceTest, OwnerSummariesContainOnlyDisplayNames) {
     EXPECT_EQ(summaries.at(id).displayName, "Sara");
 }
 
+// --- Revocable sessions -------------------------------------------------
+
+bool isCurrent(AccountService& service, const std::string& token) {
+    const auto claims = service.verifySession(token);
+    return claims && claims->sessionVersion &&
+           drogon::sync_wait(service.isSessionCurrent(claims->userId, *claims->sessionVersion));
+}
+
+TEST_F(AccountServiceTest, SessionsCarryTheStoredVersion) {
+    const auto session = registerSara();
+    const auto claims = service->verifySession(session.token);
+    ASSERT_TRUE(claims);
+    EXPECT_EQ(claims->sessionVersion, std::optional<std::int64_t>{1});
+    EXPECT_TRUE(isCurrent(*service, session.token));
+}
+
+TEST_F(AccountServiceTest, LogoutEndsEverySessionOfTheAccount) {
+    const auto first = registerSara();
+    const auto second = drogon::sync_wait(service->login("sara@example.com", "password123"));
+    ASSERT_TRUE(isCurrent(*service, first.token));  // Also fills the cache.
+
+    drogon::sync_wait(service->logout(first.token));
+    EXPECT_FALSE(isCurrent(*service, first.token)) << "the cache must not keep a revoked session alive";
+    EXPECT_FALSE(isCurrent(*service, second.token)) << "logout ends the session on every device";
+
+    const auto fresh = drogon::sync_wait(service->login("sara@example.com", "password123"));
+    EXPECT_TRUE(isCurrent(*service, fresh.token));
+}
+
+TEST_F(AccountServiceTest, RevokedOrInvalidTokenCannotEndNewerSessions) {
+    const auto old = registerSara();
+    drogon::sync_wait(service->logout(old.token));
+    const auto fresh = drogon::sync_wait(service->login("sara@example.com", "password123"));
+
+    // Replaying a revoked cookie, or sending garbage, changes nothing.
+    drogon::sync_wait(service->logout(old.token));
+    drogon::sync_wait(service->logout("garbage"));
+    drogon::sync_wait(service->logout(""));
+    EXPECT_TRUE(isCurrent(*service, fresh.token));
+}
+
+TEST_F(AccountServiceTest, PasswordResetEndsExistingSessions) {
+    const auto session = registerSara();
+    ASSERT_TRUE(isCurrent(*service, session.token));
+    drogon::sync_wait(service->requestPasswordReset("sara@example.com"));
+    drogon::sync_wait(service->confirmPasswordReset(sender->tokens.at(0), "new-password-1"));
+    EXPECT_FALSE(isCurrent(*service, session.token));
+
+    const auto fresh = drogon::sync_wait(service->login("sara@example.com", "new-password-1"));
+    EXPECT_TRUE(isCurrent(*service, fresh.token));
+}
+
+TEST_F(AccountServiceTest, FailedPasswordResetKeepsSessions) {
+    const auto session = registerSara();
+    expectApiError(service->confirmPasswordReset(std::string(40, 'x'), "new-password-1"), ErrorCode::ValidationFailed);
+    EXPECT_TRUE(isCurrent(*service, session.token));
+}
+
+TEST_F(AccountServiceTest, SessionChecksAreCachedBriefly) {
+    const auto session = registerSara();
+    const auto userId = session.user.id;
+    ASSERT_TRUE(isCurrent(*service, session.token));
+    ASSERT_TRUE(isCurrent(*service, session.token));
+    EXPECT_EQ(repository->sessionVersionLookups, 1) << "second check should come from the cache";
+
+    // A change made outside this server (e.g. a role change in SQL) is seen
+    // once the cache entry expires; a zero TTL shows it immediately.
+    AccountSettings settings{"test-secret-that-is-definitely-32-bytes-long"};
+    settings.sessionVersionCacheTtl = std::chrono::seconds(0);
+    auto uncached = std::make_shared<AccountService>(repository, settings, sender);
+    repository->users.at(userId).sessionVersion = 7;
+    EXPECT_FALSE(isCurrent(*uncached, session.token));
+}
+
+TEST_F(AccountServiceTest, SessionOfDeletedUserIsNotCurrent) {
+    const auto session = registerSara();
+    repository->users.clear();
+    EXPECT_FALSE(isCurrent(*service, session.token));
+}
+
+TEST(SessionVersionCacheTest, ExpiresAndNeverGoesBackwards) {
+    SessionVersionCache cache(std::chrono::seconds(30), 2);
+    const auto start = SessionVersionCache::Clock::now();
+    EXPECT_FALSE(cache.get("u1", start));
+
+    EXPECT_EQ(cache.put("u1", 3, start), 3);
+    EXPECT_EQ(cache.get("u1", start + std::chrono::seconds(29)), std::optional<std::int64_t>{3});
+    EXPECT_FALSE(cache.get("u1", start + std::chrono::seconds(30)));
+
+    // A slow lookup that read the old version must not undo a revocation.
+    EXPECT_EQ(cache.put("u1", 2, start), 3);
+    EXPECT_EQ(cache.put("u1", 4, start), 4);
+
+    // Bounded size: when full, expired entries are dropped first.
+    cache.put("u2", 1, start);
+    cache.put("u3", 1, start + std::chrono::seconds(31));
+    EXPECT_EQ(cache.get("u3", start + std::chrono::seconds(31)), std::optional<std::int64_t>{1});
+    EXPECT_FALSE(cache.get("u2", start + std::chrono::seconds(1)));
+}
+
 }  // namespace
 }  // namespace swapcycle::accounts

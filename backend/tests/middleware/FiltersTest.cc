@@ -1,8 +1,11 @@
 #include <drogon/HttpRequest.h>
 #include <drogon/HttpResponse.h>
 #include <gtest/gtest.h>
+#include <sodium.h>
 
+#include <array>
 #include <ctime>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -50,16 +53,65 @@ drogon::HttpRequestPtr requestWithToken(const std::optional<std::string> &token,
   return req;
 }
 
-std::string tokenFor(Role role, std::int64_t expiresAt = std::time(nullptr) + 600) {
-  return security::issueSessionToken(SessionClaims{kUserId, role, expiresAt}, kSecret);
+std::string tokenFor(Role role, std::int64_t expiresAt = std::time(nullptr) + 600,
+                     std::int64_t sessionVersion = 1) {
+  return security::issueSessionToken(SessionClaims{kUserId, role, expiresAt, sessionVersion}, kSecret);
 }
+
+// A "v1|userId|ROLE|exp" token as issued before sessions became revocable.
+std::string legacyToken(Role role, std::int64_t expiresAt) {
+  const std::string payload =
+      "v1|" + kUserId + "|" + std::string(swapcycle::accounts::toString(role)) + "|" + std::to_string(expiresAt);
+  std::array<unsigned char, crypto_auth_hmacsha256_BYTES> mac{};
+  crypto_auth_hmacsha256_state state;
+  crypto_auth_hmacsha256_init(&state, reinterpret_cast<const unsigned char *>(kSecret.data()), kSecret.size());
+  crypto_auth_hmacsha256_update(&state, reinterpret_cast<const unsigned char *>(payload.data()), payload.size());
+  crypto_auth_hmacsha256_final(&state, mac.data());
+  const auto encode = [](const unsigned char *data, std::size_t length) {
+    std::string out(sodium_base64_encoded_len(length, sodium_base64_VARIANT_URLSAFE_NO_PADDING), '\0');
+    sodium_bin2base64(out.data(), out.size(), data, length, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
+    out.resize(std::char_traits<char>::length(out.c_str()));
+    return out;
+  };
+  return encode(reinterpret_cast<const unsigned char *>(payload.data()), payload.size()) + "." +
+         encode(mac.data(), mac.size());
+}
+
+// Stands in for the accounts module: the user's current session version, or
+// an error / no answer at all.
+class FakeSessionValidator : public SessionValidator {
+ public:
+  std::int64_t currentVersion = 1;
+  bool fail = false;
+  mutable int calls = 0;
+  mutable std::function<void(SessionCheck)> pending;  // Set when deferAnswer is true.
+  bool deferAnswer = false;
+
+  void check(const std::string &userId, std::int64_t sessionVersion,
+             std::function<void(SessionCheck)> done) const override {
+    ++calls;
+    const auto result = fail ? SessionCheck::kError
+                        : userId == kUserId && sessionVersion == currentVersion ? SessionCheck::kCurrent
+                                                                                : SessionCheck::kRevoked;
+    if (deferAnswer) {
+      pending = [done = std::move(done), result](SessionCheck) { done(result); };
+      return;
+    }
+    done(result);
+  }
+};
 
 class FiltersTest : public ::testing::Test {
  protected:
   void SetUp() override {
     ASSERT_TRUE(security::initialise());
     AuthFilter::configure(kSecret, "sc_session");
+    validator = std::make_shared<FakeSessionValidator>();
+    AuthFilter::setSessionValidator(validator);
   }
+  void TearDown() override { AuthFilter::setSessionValidator(nullptr); }
+
+  std::shared_ptr<FakeSessionValidator> validator;
 };
 
 TEST_F(FiltersTest, AuthFilterAcceptsTokenFromAccountsModule) {
@@ -75,7 +127,7 @@ TEST_F(FiltersTest, AuthFilterRejectsMissingExpiredForgedOrForeignTokens) {
   AuthFilter filter;
   const auto expired = tokenFor(Role::Reader, std::time(nullptr) - 1);
   const auto otherSecret =
-      security::issueSessionToken(SessionClaims{kUserId, Role::Reader, std::time(nullptr) + 600},
+      security::issueSessionToken(SessionClaims{kUserId, Role::Reader, std::time(nullptr) + 600, 1},
                                   kSecret + "-different");
   auto forged = tokenFor(Role::Reader);
   forged.back() = forged.back() == 'A' ? 'B' : 'A';
@@ -89,6 +141,68 @@ TEST_F(FiltersTest, AuthFilterRejectsMissingExpiredForgedOrForeignTokens) {
     EXPECT_EQ(outcome.rejection->statusCode(), drogon::k401Unauthorized);
     EXPECT_EQ(outcome.errorCode(), "UNAUTHORIZED");
   }
+}
+
+TEST_F(FiltersTest, AuthFilterRejectsRevokedSessions) {
+  AuthFilter filter;
+  const auto token = tokenFor(Role::Reader, std::time(nullptr) + 600, 1);
+  ASSERT_TRUE(run(filter, requestWithToken(token)).passed);
+
+  validator->currentVersion = 2;  // Logout, password reset or role change.
+  auto req = requestWithToken(token);
+  const auto outcome = run(filter, req);
+  EXPECT_FALSE(outcome.passed);
+  ASSERT_TRUE(outcome.rejection);
+  EXPECT_EQ(outcome.rejection->statusCode(), drogon::k401Unauthorized);
+  EXPECT_EQ(outcome.errorCode(), "UNAUTHORIZED");
+  EXPECT_FALSE(req->attributes()->find(kAuthUserIdKey)) << "a revoked session must not set the user";
+
+  EXPECT_TRUE(run(filter, requestWithToken(tokenFor(Role::Reader, std::time(nullptr) + 600, 2))).passed);
+}
+
+TEST_F(FiltersTest, AuthFilterFailsClosedWhenTheCheckFails) {
+  AuthFilter filter;
+  validator->fail = true;
+  const auto outcome = run(filter, requestWithToken(tokenFor(Role::Reader)));
+  EXPECT_FALSE(outcome.passed);
+  ASSERT_TRUE(outcome.rejection);
+  EXPECT_EQ(outcome.rejection->statusCode(), drogon::k500InternalServerError);
+  EXPECT_EQ(outcome.errorCode(), "INTERNAL");
+}
+
+TEST_F(FiltersTest, AuthFilterWaitsForAnAsyncAnswer) {
+  AuthFilter filter;
+  validator->deferAnswer = true;
+  auto req = requestWithToken(tokenFor(Role::Moderator));
+  bool passed = false;
+  bool rejected = false;
+  filter.doFilter(req, [&](const drogon::HttpResponsePtr &) { rejected = true; }, [&] { passed = true; });
+  EXPECT_FALSE(passed || rejected) << "nothing may happen before the check answers";
+  ASSERT_TRUE(validator->pending);
+
+  validator->pending(SessionCheck::kCurrent);
+  EXPECT_TRUE(passed);
+  EXPECT_FALSE(rejected);
+  EXPECT_EQ(req->attributes()->get<std::string>(kAuthRoleKey), "MODERATOR");
+}
+
+TEST_F(FiltersTest, AuthFilterRejectsVersionedTokensWithoutAValidator) {
+  AuthFilter::setSessionValidator(nullptr);
+  AuthFilter filter;
+  const auto outcome = run(filter, requestWithToken(tokenFor(Role::Reader)));
+  EXPECT_FALSE(outcome.passed);
+  ASSERT_TRUE(outcome.rejection);
+  EXPECT_EQ(outcome.rejection->statusCode(), drogon::k401Unauthorized);
+}
+
+TEST_F(FiltersTest, AuthFilterAcceptsLegacyV1TokensWithoutAVersionCheck) {
+  AuthFilter filter;
+  validator->currentVersion = 99;
+  auto req = requestWithToken(legacyToken(Role::Moderator, std::time(nullptr) + 600));
+  ASSERT_TRUE(run(filter, req).passed);
+  EXPECT_EQ(validator->calls, 0);
+  EXPECT_EQ(req->attributes()->get<std::string>(kAuthUserIdKey), kUserId);
+  EXPECT_FALSE(run(filter, requestWithToken(legacyToken(Role::Reader, std::time(nullptr) - 1))).passed);
 }
 
 TEST_F(FiltersTest, AuthFilterRejectsEverythingWhenNotConfigured) {

@@ -8,10 +8,17 @@
 # memory, so restart the backend before running this again or before
 # scripts/api-probe.sh.
 #
+# The password-reset check needs a valid reset token, which is only ever sent
+# by e-mail, so the script plants one (as a SHA-256 hash, like the server
+# does) through psql. PSQL defaults to the `db` service of docker compose.
+#
 #   API_URL=http://127.0.0.1:8080/api scripts/api-smoke.sh
 set -u
 # Base URL of the API; the default matches `docker compose up`.
 B="${API_URL:-http://127.0.0.1:8080/api}"
+# Command that runs SQL from stdin against the app database.
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+PSQL="${PSQL:-docker compose -f $ROOT/docker-compose.yml exec -T db sh -c 'psql -qtA -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\"'}"
 # Scratch files (cookies, response bodies, test images) live in a temp folder.
 work=$(mktemp -d)
 cd "$work" || exit 1
@@ -94,7 +101,23 @@ check "cors other origin" "$(curl -s -D - -o /dev/null -H 'Origin: https://evil.
 check "reset request 202" "$(code -H "$J" -d '{"email":"sara@example.com"}' $B/auth/password-reset/request)" 202
 check "reset unknown 202" "$(code -H "$J" -d '{"email":"nobody@example.com"}' $B/auth/password-reset/request)" 202
 check "reset bad token 400" "$(code -H "$J" -d '{"token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","newPassword":"password999"}' $B/auth/password-reset/confirm)" 400
+# Sessions are revocable: logout and a password reset end every session of
+# the account, so a copied cookie stops working at once.
+check "second device login" "$(code -c jar3 -H "$J" -d '{"email":"sara@example.com","password":"password123"}' $B/auth/login)" 200
 check "logout clears cookie" "$(curl -s -D - -o /dev/null -b jar1 -X POST $B/auth/logout | grep -ci 'set-cookie: sc_session=; Max-Age=0')" 1
+check "old cookie after logout 401" "$(code -b jar1 $B/auth/me)" 401
+check "other device after logout 401" "$(code -b jar3 $B/auth/me)" 401
+check "replayed logout 204" "$(code -b jar1 -X POST $B/auth/logout)" 204
+check "login after logout" "$(code -c jar4 -H "$J" -d '{"email":"sara@example.com","password":"password123"}' $B/auth/login)" 200
+check "replayed logout keeps new session" "$(code -b jar4 $B/auth/me)" 200
+RESET=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+RESET_HASH=$(python -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())" "$RESET")
+check "plant reset token" "$(echo "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) SELECT id, '$RESET_HASH', now() + interval '10 minutes' FROM users WHERE email = 'sara@example.com' RETURNING 1;" | eval "$PSQL" | tr -d '\r')" 1
+check "reset confirm 204" "$(code -H "$J" -d "{\"token\":\"$RESET\",\"newPassword\":\"password456\"}" $B/auth/password-reset/confirm)" 204
+check "old cookie after reset 401" "$(code -b jar4 $B/auth/me)" 401
+check "old password after reset 401" "$(code -H "$J" -d '{"email":"sara@example.com","password":"password123"}' $B/auth/login)" 401
+check "login with new password" "$(code -c jar5 -H "$J" -d '{"email":"sara@example.com","password":"password456"}' $B/auth/login)" 200
+check "new session works" "$(code -b jar5 $B/auth/me)" 200
 for i in 1 2 3 4 5; do code -H "$J" -d '{"email":"ali@example.com","password":"wrong-wrong"}' $B/auth/login >/dev/null; done
 check "login rate limited 429" "$(code -H "$J" -d '{"email":"ali@example.com","password":"password123"}' $B/auth/login)" 429
 check "retry-after header" "$(curl -s -D - -o /dev/null -H "$J" -d '{"email":"ali@example.com","password":"password123"}' $B/auth/login | grep -ci 'retry-after')" 1

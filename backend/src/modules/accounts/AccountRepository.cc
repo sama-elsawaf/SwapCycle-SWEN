@@ -11,7 +11,7 @@ using drogon::orm::Row;
 // Static column list shared by every user query. Never contains user input.
 constexpr const char* kUserSelect = R"SQL(
     SELECT u.id::text AS id, u.email::text AS email, u.password_hash, u.display_name, u.role,
-           u.show_meeting_area, u.show_interests, u.onboarding_completed,
+           u.show_meeting_area, u.show_interests, u.onboarding_completed, u.session_version,
            to_char(u.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
            a.id AS area_id, a.name AS area_name,
            COALESCE((SELECT string_agg(i.category, ',' ORDER BY i.category)
@@ -55,6 +55,7 @@ User userFromRow(const Row& row) {
     user.privacy.showInterests = row["show_interests"].as<bool>();
     user.onboardingCompleted = row["onboarding_completed"].as<bool>();
     user.createdAt = row["created_at"].as<std::string>();
+    user.sessionVersion = row["session_version"].as<std::int64_t>();
     if (!row["area_id"].isNull()) {
         user.meetingArea = MeetingArea{row["area_id"].as<int>(), row["area_name"].as<std::string>()};
     }
@@ -149,10 +150,11 @@ drogon::Task<void> PostgresAccountRepository::insertResetToken(std::string userI
         userId, tokenHash, static_cast<int>(ttl.count()));
 }
 
-drogon::Task<bool> PostgresAccountRepository::consumeResetTokenAndSetPassword(std::string tokenHash,
-                                                                              std::string newPasswordHash) {
+drogon::Task<std::optional<SessionRevocation>> PostgresAccountRepository::consumeResetTokenAndSetPassword(
+    std::string tokenHash, std::string newPasswordHash) {
     // One statement: the token is consumed, the user's other tokens are
-    // invalidated and the password changes together, or not at all.
+    // invalidated, the password changes and existing sessions end together,
+    // or not at all.
     const auto result = co_await db_->execSqlCoro(
         R"SQL(
         WITH consumed AS (
@@ -163,14 +165,32 @@ drogon::Task<bool> PostgresAccountRepository::consumeResetTokenAndSetPassword(st
             UPDATE password_reset_tokens SET used_at = now()
             WHERE user_id IN (SELECT user_id FROM consumed) AND used_at IS NULL AND token_hash <> $1
         ), changed AS (
-            UPDATE users SET password_hash = $2, updated_at = now()
+            UPDATE users SET password_hash = $2, session_version = session_version + 1, updated_at = now()
             WHERE id IN (SELECT user_id FROM consumed)
-            RETURNING id
+            RETURNING id, session_version
         )
-        SELECT count(*) AS changed FROM changed
+        SELECT id::text AS id, session_version FROM changed
         )SQL",
         tokenHash, newPasswordHash);
-    co_return result[0]["changed"].as<std::int64_t>() == 1;
+    if (result.size() != 1) co_return std::nullopt;
+    co_return SessionRevocation{result[0]["id"].as<std::string>(), result[0]["session_version"].as<std::int64_t>()};
+}
+
+drogon::Task<std::optional<std::int64_t>> PostgresAccountRepository::findSessionVersion(std::string userId) {
+    const auto result =
+        co_await db_->execSqlCoro("SELECT session_version FROM users WHERE id = $1::uuid", userId);
+    if (result.empty()) co_return std::nullopt;
+    co_return result[0]["session_version"].as<std::int64_t>();
+}
+
+drogon::Task<std::optional<SessionRevocation>> PostgresAccountRepository::revokeSessions(
+    std::string userId, std::int64_t expectedVersion) {
+    const auto result = co_await db_->execSqlCoro(
+        "UPDATE users SET session_version = session_version + 1, updated_at = now() "
+        "WHERE id = $1::uuid AND session_version = $2::bigint RETURNING session_version",
+        userId, expectedVersion);
+    if (result.empty()) co_return std::nullopt;
+    co_return SessionRevocation{std::move(userId), result[0]["session_version"].as<std::int64_t>()};
 }
 
 }  // namespace swapcycle::accounts

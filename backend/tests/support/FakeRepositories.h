@@ -44,6 +44,7 @@ public:
     };
     std::map<std::string, ResetToken> resetTokens;  // By hash.
     int nextId = 1;
+    int sessionVersionLookups = 0;  // How often AuthFilter's check reached the "database".
 
     drogon::Task<std::optional<accounts::User>> findByEmail(std::string email) override {
         for (const auto& [id, user] : users) {
@@ -95,12 +96,26 @@ public:
         resetTokens[tokenHash] = {userId, false};
         co_return;
     }
-    drogon::Task<bool> consumeResetTokenAndSetPassword(std::string tokenHash, std::string newHash) override {
+    drogon::Task<std::optional<accounts::SessionRevocation>> consumeResetTokenAndSetPassword(
+        std::string tokenHash, std::string newHash) override {
         const auto it = resetTokens.find(tokenHash);
-        if (it == resetTokens.end() || it->second.used) co_return false;
+        if (it == resetTokens.end() || it->second.used) co_return std::nullopt;
         it->second.used = true;
-        users.at(it->second.userId).passwordHash = newHash;
-        co_return true;
+        auto& user = users.at(it->second.userId);
+        user.passwordHash = newHash;
+        co_return accounts::SessionRevocation{user.id, ++user.sessionVersion};
+    }
+    drogon::Task<std::optional<std::int64_t>> findSessionVersion(std::string userId) override {
+        ++sessionVersionLookups;
+        const auto it = users.find(userId);
+        if (it == users.end()) co_return std::nullopt;
+        co_return it->second.sessionVersion;
+    }
+    drogon::Task<std::optional<accounts::SessionRevocation>> revokeSessions(std::string userId,
+                                                                            std::int64_t expectedVersion) override {
+        const auto it = users.find(userId);
+        if (it == users.end() || it->second.sessionVersion != expectedVersion) co_return std::nullopt;
+        co_return accounts::SessionRevocation{userId, ++it->second.sessionVersion};
     }
 };
 

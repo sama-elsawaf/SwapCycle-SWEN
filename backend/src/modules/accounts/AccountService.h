@@ -15,6 +15,7 @@
 
 #include "AccountRepository.h"
 #include "AccountTypes.h"
+#include "SessionVersionCache.h"
 
 namespace swapcycle::accounts {
 
@@ -22,6 +23,10 @@ struct AccountSettings {
     std::string sessionSecret;  // At least 32 bytes, from SESSION_SECRET.
     std::chrono::seconds sessionTtl = std::chrono::hours(2);
     std::chrono::seconds resetTokenTtl = std::chrono::minutes(30);
+    // How long a looked-up session version is trusted. Bounds how long a
+    // change made outside this server (e.g. a role change in SQL) takes to
+    // end old sessions; logout and reset here take effect immediately.
+    std::chrono::seconds sessionVersionCacheTtl = std::chrono::seconds(30);
 };
 
 // Delivers password-reset links. The real e-mail sender belongs to the
@@ -68,9 +73,20 @@ public:
 
     // Never reveals whether the email exists.
     drogon::Task<void> requestPasswordReset(std::string email);
+    // Also ends every existing session of the account.
     drogon::Task<void> confirmPasswordReset(std::string token, std::string newPassword);
 
+    // Ends every session of the token's account (all devices). Does nothing
+    // for a missing, invalid, expired or already-revoked token, so logging
+    // out never fails.
+    drogon::Task<void> logout(std::string token);
+
+    // Signature, format and expiry only.
     std::optional<SessionClaims> verifySession(std::string_view token) const;
+
+    // True if sessionVersion is still the user's current version. Used by
+    // AuthFilter (through AccountSessionValidator) on every protected request.
+    drogon::Task<bool> isSessionCurrent(std::string userId, std::int64_t sessionVersion);
 
     static std::string normaliseEmail(std::string_view email);
 
@@ -81,6 +97,7 @@ private:
     AccountSettings settings_;
     std::shared_ptr<PasswordResetSender> resetSender_;
     std::string dummyPasswordHash_;  // Keeps login timing equal for unknown emails.
+    std::shared_ptr<SessionVersionCache> sessionVersions_;
 };
 
 }  // namespace swapcycle::accounts
