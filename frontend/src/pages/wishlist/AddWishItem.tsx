@@ -1,12 +1,16 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { addWishItem } from '../../api/wishlist';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
+import { useAuth } from '../../hooks/useAuth';
+import { useDraft } from '../../hooks/useDraft';
 import type { BookCondition, Genre, WishItemInput, WishItemKind } from '../../types';
 import { CONDITIONS, GENRES, LANGUAGES, LIMITS } from '../../utils/constants';
+import { sanitizeWishDraft, wishDraftHasContent } from '../../utils/drafts';
 import { errorMessage } from '../../utils/errors';
+import { STORAGE_KEYS } from '../../utils/storage';
 import { hasErrors, validateWishItem, type WishItemErrors } from '../../utils/validation';
 import { Alert, BackLink, PageHeading, SelectField } from '../PageParts';
 
@@ -26,13 +30,46 @@ interface FormState {
   minCondition: BookCondition | '';
 }
 
+const EMPTY_FORM: FormState = { title: '', author: '', genre: '', language: '', minCondition: '' };
+const draftOptions = { sanitize: sanitizeWishDraft, hasContent: wishDraftHasContent };
+
 export default function AddWishItem() {
   const navigate = useNavigate();
-  const [kind, setKind] = useState<WishItemKind>('TITLE');
-  const [form, setForm] = useState<FormState>({ title: '', author: '', genre: '', language: '', minCondition: '' });
+  const { user } = useAuth();
+  const draft = useDraft(STORAGE_KEYS.wishDraft, user?.id, draftOptions);
+  const [kind, setKind] = useState<WishItemKind>(() => draft.restored?.kind ?? 'TITLE');
+  const [form, setForm] = useState<FormState>(() => {
+    if (!draft.restored) return EMPTY_FORM;
+    const { kind: _kind, ...fields } = draft.restored;
+    return fields;
+  });
+  const [edited, setEdited] = useState(false);
   const [errors, setErrors] = useState<WishItemErrors>({});
   const [formError, setFormError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
+  const { save: saveDraft } = draft;
+
+  // Keep what the reader has typed so far, but only once they change something.
+  useEffect(() => {
+    if (edited) saveDraft({ kind, ...form });
+  }, [edited, kind, form, saveDraft]);
+
+  function update(next: Partial<FormState>) {
+    setEdited(true);
+    setForm((current) => ({ ...current, ...next }));
+  }
+
+  function chooseKind(next: WishItemKind) {
+    setEdited(true);
+    setKind(next);
+  }
+
+  function discardDraft() {
+    draft.discard();
+    setEdited(false);
+    setKind('TITLE');
+    setForm(EMPTY_FORM);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -45,6 +82,7 @@ export default function AddWishItem() {
     setSubmitting(true);
     try {
       await addWishItem(input);
+      draft.discard();
       navigate('/wishlist', { replace: true, state: { added: true } });
     } catch (failure) {
       setFormError(errorMessage(failure, 'We could not add this to your wish list. Please try again.'));
@@ -57,7 +95,7 @@ export default function AddWishItem() {
       type="button"
       role="radio"
       aria-checked={kind === value}
-      onClick={() => setKind(value)}
+      onClick={() => chooseKind(value)}
       className={
         'flex-1 rounded-full px-4 py-2 font-medium focus-visible:outline focus-visible:outline-2 ' +
         'focus-visible:outline-offset-2 focus-visible:outline-rose-deep ' +
@@ -75,6 +113,14 @@ export default function AddWishItem() {
 
       <form noValidate onSubmit={handleSubmit} className="space-y-5 rounded-card border border-soft bg-white p-5 sm:p-6">
         {formError && <Alert tone="error">{formError}</Alert>}
+        {draft.restored && (
+          <div className="space-y-2">
+            <Alert tone="info">We kept what you started earlier.</Alert>
+            <Button variant="ghost" onClick={discardDraft}>
+              Start again
+            </Button>
+          </div>
+        )}
 
         <div role="radiogroup" aria-label="What are you looking for?" className="flex gap-2 rounded-full bg-pink-light p-1">
           {kindButton('TITLE', 'A specific book')}
@@ -87,14 +133,14 @@ export default function AddWishItem() {
               label="Title"
               value={form.title}
               maxLength={LIMITS.titleMax}
-              onChange={(event) => setForm({ ...form, title: event.target.value })}
+              onChange={(event) => update({ title: event.target.value })}
               error={errors.title}
             />
             <Input
               label="Author (optional)"
               value={form.author}
               maxLength={LIMITS.authorMax}
-              onChange={(event) => setForm({ ...form, author: event.target.value })}
+              onChange={(event) => update({ author: event.target.value })}
               error={errors.author}
             />
           </>
@@ -102,7 +148,7 @@ export default function AddWishItem() {
           <SelectField
             label="Genre"
             value={form.genre}
-            onChange={(event) => setForm({ ...form, genre: event.target.value as Genre | '' })}
+            onChange={(event) => update({ genre: event.target.value as Genre | '' })}
             error={errors.genre}
           >
             <option value="">Choose a genre</option>
@@ -117,7 +163,7 @@ export default function AddWishItem() {
         <SelectField
           label="Language"
           value={form.language}
-          onChange={(event) => setForm({ ...form, language: event.target.value })}
+          onChange={(event) => update({ language: event.target.value })}
           error={errors.language}
         >
           <option value="">Any language</option>
@@ -131,7 +177,7 @@ export default function AddWishItem() {
         <SelectField
           label="Minimum condition"
           value={form.minCondition}
-          onChange={(event) => setForm({ ...form, minCondition: event.target.value as BookCondition | '' })}
+          onChange={(event) => update({ minCondition: event.target.value as BookCondition | '' })}
         >
           <option value="">Any condition</option>
           {CONDITIONS.map((condition) => (

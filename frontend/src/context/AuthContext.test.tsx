@@ -95,6 +95,20 @@ describe('AuthProvider', () => {
     spy.mockRestore();
   });
 
+  it('wipes what SwapCycle kept on this device when logging out', async () => {
+    api.getCurrentUser.mockResolvedValue(makeUser());
+    api.logout.mockResolvedValue(undefined);
+    localStorage.setItem('swapcycle:v1:recent-searches', '["q=dune"]');
+    localStorage.setItem('swapcycle:v1:draft:book', '{}');
+    localStorage.setItem('another-site-key', 'keep');
+    renderProvider();
+    await screen.findByText('authenticated');
+    await act(() => latest.logout());
+    expect(localStorage.getItem('swapcycle:v1:recent-searches')).toBeNull();
+    expect(localStorage.getItem('swapcycle:v1:draft:book')).toBeNull();
+    expect(localStorage.getItem('another-site-key')).toBe('keep');
+  });
+
   it('never stores session data in browser storage', async () => {
     api.getCurrentUser.mockResolvedValue(makeUser());
     api.login.mockResolvedValue(makeUser());

@@ -4,10 +4,15 @@ import * as authApi from '../api/auth';
 import { setUnauthorizedHandler } from '../api/client';
 import type { CurrentUser, ProfileUpdate } from '../types';
 import { isUnauthorized } from '../utils/errors';
+import { clearStoredData } from '../utils/storage';
 
 // The session itself lives in an httpOnly cookie the browser sends for us;
 // nothing about it is stored in JavaScript. This context only remembers who
 // the server says is logged in.
+//
+// Logging out also wipes the conveniences kept on this device (recent
+// searches, saved filters, form drafts), so the next person on a shared
+// computer starts clean.
 
 export type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
 
@@ -74,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await authApi.logout();
     } finally {
+      clearStoredData();
       signedOut();
     }
   }, [signedOut]);

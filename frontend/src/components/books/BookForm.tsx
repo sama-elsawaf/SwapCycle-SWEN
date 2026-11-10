@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import type { BookCondition, BookInput, Genre, MeetingArea } from '../../types';
@@ -33,6 +33,8 @@ interface Props {
   /** How many new photos may be added. */
   maxPhotos?: number;
   onSubmit: (values: BookFormValues) => void;
+  /** Called after each change the reader makes (not on first render), e.g. to save a draft. */
+  onValuesChange?: (values: BookFormValues) => void;
 }
 
 type Errors = Partial<Record<keyof BookFormValues, string>>;
@@ -70,6 +72,7 @@ export default function BookForm({
   minPhotos = 1,
   maxPhotos,
   onSubmit,
+  onValuesChange,
 }: Props) {
   const [values, setValues] = useState<BookFormValues>({
     title: '',
@@ -84,9 +87,17 @@ export default function BookForm({
     ...initial,
   });
   const [errors, setErrors] = useState<Errors>({});
+  const [edited, setEdited] = useState(false);
 
-  const set = <K extends keyof BookFormValues>(key: K, value: BookFormValues[K]) =>
+  const set = <K extends keyof BookFormValues>(key: K, value: BookFormValues[K]) => {
+    setEdited(true);
     setValues((v) => ({ ...v, [key]: value }));
+  };
+
+  useEffect(() => {
+    // Only the values trigger a report; a new callback identity does not.
+    if (edited) onValuesChange?.(values);
+  }, [values, edited]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();

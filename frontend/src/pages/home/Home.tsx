@@ -10,6 +10,7 @@ import { GENRES } from '../../utils/constants';
 import { errorMessage } from '../../utils/errors';
 import { paramsFromFilters } from '../../utils/searchParams';
 import { Alert, EmptyState, LoadingState, linkClass } from '../PageParts';
+import RecentSearches from './RecentSearches';
 
 const FEATURED_GENRES = GENRES.filter((genre) =>
   ['FICTION', 'MYSTERY', 'SCIENCE_FICTION', 'BIOGRAPHY', 'TRAVEL', 'SELF_HELP'].includes(genre.value),
@@ -61,6 +62,7 @@ export default function Home() {
             </li>
           ))}
         </ul>
+        <RecentSearches />
       </section>
 
       {user && (
