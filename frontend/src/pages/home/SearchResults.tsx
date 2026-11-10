@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import BookCard from '../../components/books/BookCard';
@@ -10,8 +10,10 @@ import type { BookCondition, Genre, BookSearchParams } from '../../types';
 import { CONDITIONS, GENRES, LANGUAGES, LIMITS } from '../../utils/constants';
 import { errorMessage } from '../../utils/errors';
 import { pluralize } from '../../utils/format';
+import { hasFilters, loadSavedFilters, rememberSearch, saveFilters } from '../../utils/savedSearches';
 import { filtersFromParams, paramsFromFilters } from '../../utils/searchParams';
 import { Alert, EmptyState, LoadingState, PageHeading, Pagination, SelectField } from '../PageParts';
+import RecentSearches from './RecentSearches';
 
 export default function SearchResults() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -20,10 +22,30 @@ export default function SearchResults() {
   const { areas } = useMeetingAreas();
   const results = useBookSearch(filters);
 
+  const [usingSaved, setUsingSaved] = useState(false);
+  const checkedSaved = useRef(false);
+
   // Keep the form in step with back/forward navigation.
   useEffect(() => setDraft(filters), [filters]);
 
+  // Opening the page with no filters brings back the reader's last ones.
+  // After that, every search updates what is remembered on this device.
+  useEffect(() => {
+    if (!checkedSaved.current) {
+      checkedSaved.current = true;
+      const saved = loadSavedFilters();
+      if (searchParams.toString() === '' && hasFilters(saved)) {
+        setUsingSaved(true);
+        setSearchParams(paramsFromFilters(saved), { replace: true });
+        return;
+      }
+    }
+    rememberSearch(filters);
+    saveFilters(filters);
+  }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function apply(next: BookSearchParams) {
+    setUsingSaved(false);
     setSearchParams(paramsFromFilters({ ...next, page: undefined }));
   }
 
@@ -115,6 +137,13 @@ export default function SearchResults() {
           </Button>
         </div>
       </form>
+
+      {usingSaved && (
+        <div className="mt-4">
+          <Alert tone="info">Showing the filters you used last time. Use “Clear filters” to see every book.</Alert>
+        </div>
+      )}
+      <RecentSearches key={searchParams.toString()} tone="plain" />
 
       <section aria-live="polite" aria-busy={results.loading} className="mt-8">
         {results.loading && <LoadingState label="Searching…" />}
