@@ -15,8 +15,15 @@ using common::ErrorCode;
 using drogon::HttpRequestPtr;
 using drogon::HttpResponsePtr;
 
+// jsoncpp throws when input is nested deeper than its stack limit; that is bad
+// input (400), not a server fault (500).
 const Json::Value& jsonBody(const HttpRequestPtr& req) {
-    const auto& json = req->getJsonObject();
+    const Json::Value* json = nullptr;
+    try {
+        json = req->getJsonObject().get();
+    } catch (const Json::Exception&) {
+        json = nullptr;
+    }
     if (!json || !json->isObject()) throw ApiError(ErrorCode::ValidationFailed, "Expected a JSON object body.");
     return *json;
 }

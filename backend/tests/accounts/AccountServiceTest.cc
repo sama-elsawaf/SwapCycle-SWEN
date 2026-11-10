@@ -46,6 +46,19 @@ TEST_F(AccountServiceTest, RegisterValidatesInput) {
                    ErrorCode::ValidationFailed);
 }
 
+TEST_F(AccountServiceTest, EmailsWithControlCharactersAreRejected) {
+    // PostgreSQL text stops at "\0", so these would be stored or looked up as a different address.
+    using namespace std::string_literals;
+    expectApiError(service->registerUser("p5@exa\0mple.com"s, "password123", "Sara"), ErrorCode::ValidationFailed);
+    expectApiError(service->registerUser("sara@example.com\0x"s, "password123", "Sara"), ErrorCode::ValidationFailed);
+    expectApiError(service->registerUser("sara@exam\tple.com", "password123", "Sara"), ErrorCode::ValidationFailed);
+    expectApiError(service->requestPasswordReset("sara@example.com\0x"s), ErrorCode::ValidationFailed);
+
+    registerSara();
+    // A suffix after "\0" must not reach the real account (or dodge the per-email login limit).
+    expectApiError(service->login("sara@example.com\0x"s, "password123"), ErrorCode::Unauthorized);
+}
+
 TEST_F(AccountServiceTest, DuplicateEmailIsAGenericConflict) {
     registerSara();
     expectApiError(service->registerUser("sara@example.com", "password456", "Other"), ErrorCode::Conflict);

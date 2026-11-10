@@ -17,7 +17,7 @@ jobs:
     name: Repository hygiene
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: No committed secrets or env files
         run: |
           if git ls-files | grep -E '(^|/)\.env(\.|$)' | grep -v '\.env\.example$'; then
@@ -55,7 +55,7 @@ jobs:
       PGPASSWORD: ci-only-password
       PGDATABASE: swapcycle_ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Apply migrations in order
         run: |
           for file in $(ls database/migrations/*.sql | sort); do
@@ -70,7 +70,7 @@ jobs:
     name: Backend build and GoogleTest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build image (compiles with -Werror and runs GoogleTest)
         run: >
           docker build backend -f backend/DockerFile
@@ -86,8 +86,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm

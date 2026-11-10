@@ -1,71 +1,84 @@
 # SwapCycle-SWEN
-A community platform where student readers exchange physical books through direct two-way swaps and three-person exchange cycles, so that everyone receives a book they actually want. 
 
-Course: SWEN360 – Software Design & Engineering Project status: Planning stage (no code written yet)
+A community platform where student readers exchange physical books through direct two-way swaps and three-person exchange cycles, so that everyone receives a book they actually want.
 
-# Project Vision
-Readers accumulate books they no longer use while buying others that someone nearby already owns. Direct swaps often fail because two people do not want each other's books. SwapCycle solves this by matching readers into two-way and three-way cycles. 
+Course: SWEN360 – Software Design & Engineering
 
-Example: Sara offers a mystery novel, Ali offers a travel book, and Noor offers a biography. No direct swap works between any two of them, but a three-person cycle gives each reader a book they want. 
+## Project vision
+
+Readers accumulate books they no longer use while buying others that someone nearby already owns. Direct swaps often fail because two people do not want each other's books. SwapCycle solves this by matching readers into two-way and three-way cycles.
+
+Example: Sara offers a mystery novel, Ali offers a travel book, and Noor offers a biography. No direct swap works between any two of them, but a three-person cycle gives each reader a book they want.
 
 SwapCycle makes matching, agreement, and handover visible to everyone involved.
 
-## Current Stage 
-We are in the **planning and design phase**.
+## Current stage: Phase 2, core implementation
 
-| Item | Status |
+| Area | Status |
 |---|---|
-| Team formed and project idea chosen | Done |
-| First team meeting (idea selection, Scrum Master assigned) | Done |
-| Project outline reviewed | Done |
-| High-level system architecture outlined | Done |
-| Detailed design drafted (data model, matching, reservations) | Done |
-| Functional task list (44 tasks across 10 areas) | Done |
-| Product backlog and user stories | Not started |
-| Sprint planning and task assignment | Not started |
-| Kanban board setup | Not started |
-| Implementation | Not started |
+| Accounts: register, log in/out, password reset, onboarding, profile, privacy | Done (backend + frontend) |
+| Book listings: create, edit, withdraw/relist, delete, photos | Done |
+| Wish lists and search with filters | Done |
+| Local storage: recent searches, remembered filters, form drafts | Done (cleared on logout) |
+| Direct offers, matching (2- and 3-way cycles), reservations | Planned (Sprint 2) |
+| Handover, messaging, notifications, reviews, disputes, moderation | Planned (Sprints 2–3) |
 
-## Next Steps
+Modules and pages for the planned features exist as placeholders (`backend/src/modules/*`, `frontend/src/pages/*`, migrations `004`–`007`).
 
-1. Write user stories from the functional task list.
-2. Prioritize the backlog and plan Sprint 1.
-3. Set up the Kanban board and repository.
-4. Assign tasks to team members.
-5. Begin Sprint 1 (accounts, book listings, search).
+## Tech stack
 
+- **Backend:** C++20, Drogon, PostgreSQL 16, libsodium (argon2id passwords, signed session tokens), CMake, GoogleTest, Docker
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, React Router, Vitest
+- **API contract:** [`docs/api/openapi.yaml`](docs/api/openapi.yaml) is the source of truth
+- **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs hygiene checks, migrations, the backend build and tests, and the frontend tests, typecheck, build and `npm audit` on every pull request
 
-# Planned Features
+## Getting started
 
-## Foundation Features 
-- Reader accounts with display names, meeting areas, interests, and privacy settings 
-- Physical book listings with title, author, language, edition, genre, condition, and photos 
-- Wish lists for specific titles or broader interests 
-- Search and filters by genre, language, condition, title, author, and area 
-- Direct exchange offers between two readers 
-- In-app conversations and a shared exchange page 
-- Exchange statuses, meeting arrangements, completion confirmations, and feedback 
+Needs Docker Desktop and Node.js 20.19+ or 22.12+ (CI uses 22).
 
-## Advanced Features 
+```bash
+cp .env.example .env           # then set SESSION_SECRET (required) and the database password
+docker compose up --build      # PostgreSQL 16 + migrations + backend on http://localhost:8080
+cd frontend
+npm install
+npm run dev                    # http://localhost:5173, /api is proxied to the backend
+```
 
-- **Two-way and three-way matching** with an explanation for every proposed match 
-- **Group acceptance and book reservations** with expiry 
-- **Availability and withdrawal recovery** with fresh consent from affected readers 
-- **Coordinated handover** with public meeting points, time polls, and recipient-specific codes 
-- **Condition checks and disputes** with evidence and moderator decisions 
-- **Discovery and reading community** with notifications, reviews, and recommendations 
- 
+## Testing
 
+```bash
+cd frontend && npm run check                                  # typecheck + Vitest + build
+cd frontend && npm audit                                      # dependency vulnerabilities
+docker build backend -f backend/DockerFile --target build \
+  --build-arg WARNINGS_AS_ERRORS=ON                           # compile + GoogleTest
+scripts/api-smoke.sh                                          # end-to-end API checks (running backend, empty DB)
+scripts/api-probe.sh                                          # abuse and edge-case probes
+```
 
-## Planned Architecture 
+See [`docs/testing.md`](docs/testing.md) for the full test plan, including the sanitizer build.
 
-SwapCycle will be built as a modular monolith: one backend with strictly separated modules. 
+## Repository layout
 
-Key Design Decisions:
+```
+backend/     Drogon API (src/common, src/middleware, src/modules/*, src/jobs, tests)
+frontend/    React app (src/api, components, context, hooks, pages, utils)
+database/    Numbered SQL migrations (never edit a merged one; add a new number)
+docs/        API spec, requirements, design system, architecture, sprints, minutes
+scripts/     API smoke and probe scripts
+```
 
-1. Book descriptions are modeled separately from physical copies, so different editions and conditions match correctly. 
-2. Matching searches only cycles of length two or three and avoids duplicate proposals. 
-3. Reservations use database transactions and expiry so one copy cannot join two confirmed exchanges. 
-4. Each physical transfer is recorded separately, because handing over books cannot be atomic. 
-5. Contact and meeting details are visible only to exchange participants. 
-6. Matching is explainable, and new readers are never penalized for having no history. 
+## Team rules
+
+- Work on a feature branch and open a pull request; never push to `main`.
+- PR titles start with the author's name and student ID.
+- Only change files in your own area; explain any change to a shared file in the PR.
+- Never commit secrets or `.env` files. Configuration comes from the environment.
+
+## Key design decisions
+
+1. Book descriptions are modelled separately from physical copies, so different editions and conditions match correctly.
+2. Matching searches only cycles of length two or three and avoids duplicate proposals.
+3. Reservations use database transactions and expiry, so one copy cannot join two confirmed exchanges.
+4. Each physical transfer is recorded separately, because handing over books cannot be atomic.
+5. Contact and meeting details are visible only to exchange participants.
+6. Matching is explainable, and new readers are never penalised for having no history.

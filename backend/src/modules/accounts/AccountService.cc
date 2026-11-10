@@ -43,9 +43,13 @@ bool hasControlCharacters(std::string_view value) {
     return std::any_of(value.begin(), value.end(), [](char c) { return std::iscntrl(static_cast<unsigned char>(c)); });
 }
 
-// Deliberately simple: one "@", no spaces, a dot in the domain. The real
-// check is that the reader can receive mail.
+// Deliberately simple: one "@", no spaces or control characters, a dot in
+// the domain. The real check is that the reader can receive mail.
+// Control characters matter: PostgreSQL text stops at "\0", so
+// "sara@example.com\0x" would otherwise be stored or looked up as
+// "sara@example.com" while being counted as a different address.
 bool looksLikeEmail(std::string_view email) {
+    if (hasControlCharacters(email)) return false;
     const auto at = email.find('@');
     if (at == std::string_view::npos || at == 0 || email.find('@', at + 1) != std::string_view::npos) return false;
     const auto domain = email.substr(at + 1);
@@ -123,7 +127,7 @@ drogon::Task<Session> AccountService::registerUser(std::string email, std::strin
 drogon::Task<Session> AccountService::login(std::string email, std::string password) {
     const auto normalised = normaliseEmail(email);
     if (normalised.empty() || password.empty() || normalised.size() > kMaxEmailLength ||
-        password.size() > kMaxPasswordLength) {
+        password.size() > kMaxPasswordLength || !looksLikeEmail(normalised)) {
         throw ApiError(ErrorCode::Unauthorized, kInvalidCredentials);
     }
 

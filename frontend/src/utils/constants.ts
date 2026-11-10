@@ -72,7 +72,5 @@ export const LIMITS = {
   editionMax: 60,
   conditionNotesMax: 500,
   searchMax: 100,
-  photoBytesMax: 5 * 1024 * 1024,
-  photosPerBook: 5,
   pageSize: 20,
 } as const;

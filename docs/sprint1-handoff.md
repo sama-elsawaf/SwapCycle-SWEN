@@ -48,7 +48,7 @@ All shared pieces now exist; this is how they fit together.
 ## How to run
 
 ```bash
-cp .env.example .env        # then set real values
+cp .env.example .env        # then set real values (SESSION_SECRET is required)
 docker compose up --build   # postgres:16 + migrations + backend on :8080
 cd frontend && npm install && npm run dev   # http://localhost:5173, /api proxied
 ```
@@ -62,8 +62,8 @@ cd frontend && npm run check                                 # typecheck + tests
 cd frontend && npm audit                                     # 0 vulnerabilities at time of writing
 ```
 
-The frontend tests mock the teammate-owned modules, so `npm test` already passes.
-`npm run typecheck`/`build` and the backend build need the interfaces above.
+All of these pass on `main`, and CI runs the same steps on every pull request.
+For a deeper check, `docs/testing.md` explains the sanitizer build and the API probe script.
 
 ## CI (`.github/workflows/ci.yml`)
 
