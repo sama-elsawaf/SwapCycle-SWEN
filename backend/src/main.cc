@@ -16,6 +16,7 @@
 #include "middleware/AuthFilter.h"
 #include "modules/accounts/AccountController.h"
 #include "modules/accounts/AccountSecurity.h"
+#include "modules/accounts/AccountSessionValidator.h"
 #include "modules/catalog/CatalogController.h"
 #include "modules/wishlist_search/WishlistSearchController.h"
 
@@ -85,6 +86,8 @@ int main() {
 
     auto accountService = std::make_shared<accounts::AccountService>(
         std::make_shared<accounts::PostgresAccountRepository>(db), accountSettings);
+    // Lets AuthFilter refuse sessions ended by logout, password reset or a role change.
+    AuthFilter::setSessionValidator(std::make_shared<accounts::AccountSessionValidator>(accountService));
     auto catalogService = std::make_shared<catalog::CatalogService>(
         std::make_shared<catalog::PostgresCatalogRepository>(db),
         std::make_shared<catalog::FilePhotoStore>(config.uploadDir + "/books"), accountService);

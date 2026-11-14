@@ -8,10 +8,14 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - db-data:/var/lib/postgresql/data
-      # Run in name order on the first start of an empty database.
+      # Run in name order on the FIRST start of an empty database only.
+      # After pulling a new migration, run `docker compose down -v` to rebuild
+      # the database (this deletes local data), or apply the new file by hand.
       - ./database/migrations:/docker-entrypoint-initdb.d:ro
     ports:
-      - "127.0.0.1:5432:5432"
+      # Host port for psql/GUI tools. Not 5432, so it does not clash with a
+      # PostgreSQL already installed on the machine; change it in .env.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s

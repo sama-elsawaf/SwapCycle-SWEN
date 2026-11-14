@@ -1,4 +1,8 @@
 #include <gtest/gtest.h>
+#include <sodium.h>
+
+#include <array>
+#include <string>
 
 #include "modules/accounts/AccountSecurity.h"
 #include "modules/accounts/RateLimiter.h"
@@ -27,27 +31,78 @@ TEST_F(AccountSecurityTest, SamePasswordGetsDifferentSalts) {
 }
 
 TEST_F(AccountSecurityTest, SessionTokenRoundTrips) {
-    const auto token = security::issueSessionToken({"user-1", Role::Moderator, kNow + 60}, kSecret);
+    const auto token = security::issueSessionToken({"user-1", Role::Moderator, kNow + 60, 1}, kSecret);
     const auto claims = security::verifySessionToken(token, kSecret, kNow);
     ASSERT_TRUE(claims);
     EXPECT_EQ(claims->userId, "user-1");
     EXPECT_EQ(claims->role, Role::Moderator);
 }
 
+TEST_F(AccountSecurityTest, SessionTokenCarriesSessionVersion) {
+    const auto token = security::issueSessionToken({"user-1", Role::Reader, kNow + 60, 42}, kSecret);
+    const auto claims = security::verifySessionToken(token, kSecret, kNow);
+    ASSERT_TRUE(claims);
+    EXPECT_EQ(claims->sessionVersion, std::optional<std::int64_t>{42});
+}
+
+TEST_F(AccountSecurityTest, RefusesToIssueTokenWithoutSessionVersion) {
+    EXPECT_THROW(security::issueSessionToken({"user-1", Role::Reader, kNow + 60, std::nullopt}, kSecret),
+                 std::invalid_argument);
+    EXPECT_THROW(security::issueSessionToken({"user-1", Role::Reader, kNow + 60, 0}, kSecret), std::invalid_argument);
+}
+
+std::string toBase64Url(const unsigned char* data, std::size_t length) {
+    std::string out(sodium_base64_encoded_len(length, sodium_base64_VARIANT_URLSAFE_NO_PADDING), '\0');
+    sodium_bin2base64(out.data(), out.size(), data, length, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
+    out.resize(std::char_traits<char>::length(out.c_str()));
+    return out;
+}
+
+// Signs an arbitrary payload the way the server does, to build legacy and malformed tokens.
+std::string signPayload(const std::string& payload) {
+    std::array<unsigned char, crypto_auth_hmacsha256_BYTES> mac{};
+    crypto_auth_hmacsha256_state state;
+    crypto_auth_hmacsha256_init(&state, reinterpret_cast<const unsigned char*>(kSecret.data()), kSecret.size());
+    crypto_auth_hmacsha256_update(&state, reinterpret_cast<const unsigned char*>(payload.data()), payload.size());
+    crypto_auth_hmacsha256_final(&state, mac.data());
+    return toBase64Url(reinterpret_cast<const unsigned char*>(payload.data()), payload.size()) + "." +
+           toBase64Url(mac.data(), mac.size());
+}
+
+TEST_F(AccountSecurityTest, AcceptsLegacyV1TokensUntilExpiryWithoutVersion) {
+    const auto legacy = signPayload("v1|user-1|READER|" + std::to_string(kNow + 60));
+    const auto claims = security::verifySessionToken(legacy, kSecret, kNow);
+    ASSERT_TRUE(claims);
+    EXPECT_EQ(claims->userId, "user-1");
+    EXPECT_FALSE(claims->sessionVersion);
+    EXPECT_FALSE(security::verifySessionToken(legacy, kSecret, kNow + 60));
+}
+
+TEST_F(AccountSecurityTest, RejectsSignedTokensWithBadVersionFields) {
+    const auto exp = std::to_string(kNow + 60);
+    for (const auto& payload : {"v2|user-1|READER|" + exp,    // v2 without a version
+                                "v1|user-1|READER|3|" + exp,  // v1 with five fields
+                                "v2|user-1|READER|0|" + exp,  // version must be >= 1
+                                "v2|user-1|READER|-1|" + exp, "v2|user-1|READER|1x|" + exp,
+                                "v2|user-1|READER||" + exp, "v3|user-1|READER|1|" + exp}) {
+        EXPECT_FALSE(security::verifySessionToken(signPayload(payload), kSecret, kNow)) << payload;
+    }
+}
+
 TEST_F(AccountSecurityTest, RejectsExpiredToken) {
-    const auto token = security::issueSessionToken({"user-1", Role::Reader, kNow}, kSecret);
+    const auto token = security::issueSessionToken({"user-1", Role::Reader, kNow, 1}, kSecret);
     EXPECT_FALSE(security::verifySessionToken(token, kSecret, kNow));
 }
 
 TEST_F(AccountSecurityTest, RejectsWrongSecret) {
-    const auto token = security::issueSessionToken({"user-1", Role::Reader, kNow + 60}, kSecret);
+    const auto token = security::issueSessionToken({"user-1", Role::Reader, kNow + 60, 1}, kSecret);
     EXPECT_FALSE(security::verifySessionToken(token, kSecret + "x", kNow));
 }
 
 TEST_F(AccountSecurityTest, RejectsTamperedPayload) {
     // Forge a moderator payload but keep the reader token's signature.
-    const auto reader = security::issueSessionToken({"user-1", Role::Reader, kNow + 60}, kSecret);
-    const auto moderator = security::issueSessionToken({"user-1", Role::Moderator, kNow + 60}, kSecret);
+    const auto reader = security::issueSessionToken({"user-1", Role::Reader, kNow + 60, 1}, kSecret);
+    const auto moderator = security::issueSessionToken({"user-1", Role::Moderator, kNow + 60, 1}, kSecret);
     const auto forged = moderator.substr(0, moderator.find('.')) + reader.substr(reader.find('.'));
     EXPECT_FALSE(security::verifySessionToken(forged, kSecret, kNow));
 }
@@ -59,7 +114,7 @@ TEST_F(AccountSecurityTest, RejectsMalformedTokens) {
 }
 
 TEST_F(AccountSecurityTest, RefusesShortSecret) {
-    EXPECT_THROW(security::issueSessionToken({"user-1", Role::Reader, kNow + 60}, "short"), std::invalid_argument);
+    EXPECT_THROW(security::issueSessionToken({"user-1", Role::Reader, kNow + 60, 1}, "short"), std::invalid_argument);
 }
 
 TEST_F(AccountSecurityTest, RandomTokensAreUniqueAndHashIsStable) {

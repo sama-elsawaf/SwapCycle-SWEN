@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { BOOK_CONDITIONS, GENRES as API_GENRES, INTEREST_CATEGORIES as API_INTERESTS } from '../api/types';
 import type { BookInput } from '../types';
+import { CONDITIONS, GENRES, INTEREST_CATEGORIES } from './constants';
 import { errorMessage, isUnauthorized } from './errors';
 import { bookTitleLine, conditionLabel, formatDate, genreLabel, languageName, pluralize } from './format';
 import { homeFor, safeRedirectPath } from './navigation';
@@ -12,7 +14,6 @@ import {
   validateDisplayName,
   validateEmail,
   validatePassword,
-  validatePhotoFile,
   validateWishItem,
 } from './validation';
 
@@ -32,6 +33,7 @@ describe('validation', () => {
     expect(validateEmail('sara@example.com')).toBeUndefined();
     expect(validateEmail('  ')).toBeDefined();
     expect(validateEmail('sara@example')).toBeDefined();
+    expect(validateEmail('sara@example.com\u0000x')).toBeDefined();
     expect(validatePassword('1234567')).toMatch(/at least 8/);
     expect(validatePassword('12345678')).toBeUndefined();
     expect(validatePassword('x'.repeat(129))).toMatch(/at most 128/);
@@ -58,13 +60,6 @@ describe('validation', () => {
     expect(validateWishItem({ kind: 'TITLE', title: ' ' }).title).toBeDefined();
     expect(validateWishItem({ kind: 'INTEREST' }).genre).toBeDefined();
     expect(hasErrors(validateWishItem({ kind: 'INTEREST', genre: 'TRAVEL', language: 'ar' }))).toBe(false);
-  });
-
-  it('rejects photos that are not small JPEG or PNG files', () => {
-    expect(validatePhotoFile(new File(['x'], 'a.png', { type: 'image/png' }))).toBeUndefined();
-    expect(validatePhotoFile(new File(['x'], 'a.gif', { type: 'image/gif' }))).toBeDefined();
-    const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'big.jpg', { type: 'image/jpeg' });
-    expect(validatePhotoFile(big)).toMatch(/5 MB/);
   });
 });
 
@@ -141,5 +136,15 @@ describe('format', () => {
   it('formats dates and ignores invalid ones', () => {
     expect(formatDate('2026-03-05T10:00:00Z', 'en-GB')).toBe('5 March 2026');
     expect(formatDate('not a date')).toBe('');
+  });
+});
+
+describe('option lists', () => {
+  // The labelled lists in constants.ts must offer exactly the values the API accepts,
+  // in the API's order (conditions run best to worst).
+  it('match the API enums', () => {
+    expect(GENRES.map((option) => option.value)).toEqual([...API_GENRES]);
+    expect(INTEREST_CATEGORIES.map((option) => option.value)).toEqual([...API_INTERESTS]);
+    expect(CONDITIONS.map((option) => option.value)).toEqual([...BOOK_CONDITIONS]);
   });
 });

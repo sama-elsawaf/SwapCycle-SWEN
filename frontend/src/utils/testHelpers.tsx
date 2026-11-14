@@ -1,65 +1,6 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
-
 import type { CurrentUser } from '../types';
 
-// Simple stand-ins for components owned by other modules, so page tests check
-// page behaviour only. Use with vi.mock(), e.g.
-//   vi.mock('../../components/ui/Button', async () => ({ default: (await import('../../utils/testHelpers')).MockButton }));
-
-export function MockButton({
-  loading,
-  fullWidth: _fullWidth,
-  variant: _variant,
-  children,
-  type = 'button',
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { loading?: boolean; fullWidth?: boolean; variant?: string }) {
-  return (
-    <button type={type} aria-busy={loading || undefined} {...props}>
-      {children}
-    </button>
-  );
-}
-
-export function MockInput({
-  label,
-  error,
-  hint: _hint,
-  hideLabel: _hideLabel,
-  icon: _icon,
-  trailing,
-  id,
-  ...props
-}: InputHTMLAttributes<HTMLInputElement> & {
-  label: string;
-  error?: string;
-  hint?: string;
-  hideLabel?: boolean;
-  icon?: ReactNode;
-  trailing?: ReactNode;
-}) {
-  const inputId = id ?? `input-${label.replace(/\W+/g, '-').toLowerCase()}`;
-  return (
-    <div>
-      <label htmlFor={inputId}>{label}</label>
-      <input id={inputId} aria-invalid={error ? true : undefined} {...props} />
-      {trailing}
-      {error && <p>{error}</p>}
-    </div>
-  );
-}
-
-export function MockChip({ label, selected, onToggle }: { label: string; selected: boolean; onToggle: () => void }) {
-  return (
-    <button type="button" aria-pressed={selected} onClick={onToggle}>
-      {label}
-    </button>
-  );
-}
-
-export function MockChildren({ children }: { children?: ReactNode }) {
-  return <div>{children}</div>;
-}
+// Shared fixtures for tests.
 
 export function makeUser(overrides: Partial<CurrentUser> = {}): CurrentUser {
   return {

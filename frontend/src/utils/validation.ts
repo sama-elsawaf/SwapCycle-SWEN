@@ -14,7 +14,7 @@ function length(value: string): number {
 export function validateEmail(email: string): string | undefined {
   const value = email.trim();
   if (!value) return 'Enter your email address.';
-  if (value.length > LIMITS.emailMax || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+  if (value.length > LIMITS.emailMax || !/^[^\s@\u0000-\u001f\u007f]+@[^\s@\u0000-\u001f\u007f]+\.[^\s@\u0000-\u001f\u007f]+$/.test(value)) {
     return 'Enter a valid email address.';
   }
   return undefined;
@@ -87,11 +87,4 @@ export function validateWishItem(input: WishItemDraft): WishItemErrors {
 
 export function hasErrors(errors: object): boolean {
   return Object.values(errors).some(Boolean);
-}
-
-/** Checks a chosen photo before upload; the server re-checks the real file signature. */
-export function validatePhotoFile(file: File): string | undefined {
-  if (file.type !== 'image/jpeg' && file.type !== 'image/png') return 'Photos must be JPEG or PNG images.';
-  if (file.size > LIMITS.photoBytesMax) return 'Photos must be 5 MB or smaller.';
-  return undefined;
 }

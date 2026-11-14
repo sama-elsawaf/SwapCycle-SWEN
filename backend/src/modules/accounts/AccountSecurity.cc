@@ -2,6 +2,7 @@
 
 #include <sodium.h>
 
+#include <array>
 #include <charconv>
 #include <stdexcept>
 #include <vector>
@@ -10,7 +11,8 @@ namespace swapcycle::accounts::security {
 
 namespace {
 
-constexpr std::string_view kTokenVersion = "v1";
+constexpr std::string_view kTokenFormat = "v2";
+constexpr std::string_view kLegacyTokenFormat = "v1";  // No session version; accepted until expiry.
 constexpr std::size_t kMinSecretBytes = 32;
 
 std::string toBase64Url(const unsigned char* data, std::size_t length) {
@@ -52,6 +54,14 @@ std::vector<std::string_view> split(std::string_view value, char separator) {
     }
 }
 
+// Whole string must be a base-10 integer.
+std::optional<std::int64_t> parseInteger(std::string_view text) {
+    std::int64_t value = 0;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (text.empty() || error != std::errc{} || end != text.data() + text.size()) return std::nullopt;
+    return value;
+}
+
 }  // namespace
 
 bool initialise() {
@@ -74,8 +84,12 @@ bool verifyPassword(std::string_view hash, std::string_view password) {
 
 std::string issueSessionToken(const SessionClaims& claims, std::string_view secret) {
     if (secret.size() < kMinSecretBytes) throw std::invalid_argument("session secret is too short");
-    const std::string payload = std::string(kTokenVersion) + "|" + claims.userId + "|" +
-                                std::string(toString(claims.role)) + "|" + std::to_string(claims.expiresAt);
+    if (!claims.sessionVersion || *claims.sessionVersion < 1) {
+        throw std::invalid_argument("session version is required");
+    }
+    const std::string payload = std::string(kTokenFormat) + "|" + claims.userId + "|" +
+                                std::string(toString(claims.role)) + "|" +
+                                std::to_string(*claims.sessionVersion) + "|" + std::to_string(claims.expiresAt);
     const auto mac = hmac(secret, payload);
     return toBase64Url(reinterpret_cast<const unsigned char*>(payload.data()), payload.size()) + "." +
            toBase64Url(mac.data(), mac.size());
@@ -95,14 +109,20 @@ std::optional<SessionClaims> verifySessionToken(std::string_view token, std::str
     if (sodium_memcmp(expected.data(), signature->data(), expected.size()) != 0) return std::nullopt;
 
     const auto fields = split(*payload, '|');
-    if (fields.size() != 4 || fields[0] != kTokenVersion) return std::nullopt;
-    const auto role = roleFromString(fields[2]);
-    std::int64_t expiresAt = 0;
-    const auto [end, error] = std::from_chars(fields[3].data(), fields[3].data() + fields[3].size(), expiresAt);
-    if (!role || error != std::errc{} || end != fields[3].data() + fields[3].size()) return std::nullopt;
-    if (expiresAt <= nowUnixSeconds) return std::nullopt;
+    const bool current = fields.size() == 5 && fields[0] == kTokenFormat;
+    const bool legacy = fields.size() == 4 && fields[0] == kLegacyTokenFormat;
+    if (!current && !legacy) return std::nullopt;
 
-    return SessionClaims{std::string(fields[1]), *role, expiresAt};
+    const auto role = roleFromString(fields[2]);
+    const auto expiresAt = parseInteger(fields.back());
+    if (!role || !expiresAt || *expiresAt <= nowUnixSeconds) return std::nullopt;
+
+    SessionClaims claims{std::string(fields[1]), *role, *expiresAt, std::nullopt};
+    if (current) {
+        claims.sessionVersion = parseInteger(fields[3]);
+        if (!claims.sessionVersion || *claims.sessionVersion < 1) return std::nullopt;
+    }
+    return claims;
 }
 
 std::string randomToken() {

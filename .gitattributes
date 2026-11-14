@@ -1,0 +1,10 @@
+# Keep LF line endings in the repository and in every checkout, so Windows
+# and macOS/Linux teammates never see whole files "changed" by line endings,
+# and shell scripts and SQL run unchanged inside Docker.
+* text=auto eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.woff2 binary

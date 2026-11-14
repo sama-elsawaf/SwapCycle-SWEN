@@ -1,5 +1,7 @@
 #include "AccountController.h"
 
+#include <trantor/utils/Logger.h>
+
 #include <algorithm>
 #include <utility>
 
@@ -15,8 +17,15 @@ using common::ErrorCode;
 using drogon::HttpRequestPtr;
 using drogon::HttpResponsePtr;
 
+// jsoncpp throws when input is nested deeper than its stack limit; that is bad
+// input (400), not a server fault (500).
 const Json::Value& jsonBody(const HttpRequestPtr& req) {
-    const auto& json = req->getJsonObject();
+    const Json::Value* json = nullptr;
+    try {
+        json = req->getJsonObject().get();
+    } catch (const Json::Exception&) {
+        json = nullptr;
+    }
     if (!json || !json->isObject()) throw ApiError(ErrorCode::ValidationFailed, "Expected a JSON object body.");
     return *json;
 }
@@ -112,7 +121,15 @@ drogon::Task<HttpResponsePtr> AccountController::login(HttpRequestPtr req) {
     }
 }
 
-drogon::Task<HttpResponsePtr> AccountController::logout(HttpRequestPtr /*req*/) {
+// Ends every session of the account, then clears the cookie. Always 204:
+// logging out with a missing or stale cookie is not an error.
+drogon::Task<HttpResponsePtr> AccountController::logout(HttpRequestPtr req) {
+    try {
+        co_await service_->logout(req->getCookie(cookie_.name));
+    } catch (const std::exception& error) {
+        // The cookie is still cleared below; the old token expires on its own.
+        LOG_ERROR << "Could not revoke sessions on logout: " << error.what();
+    }
     auto resp = noContent();
     drogon::Cookie cookie(cookie_.name, "");
     cookie.setHttpOnly(true);

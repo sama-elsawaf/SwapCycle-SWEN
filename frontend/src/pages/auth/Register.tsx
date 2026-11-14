@@ -67,7 +67,10 @@ export default function Register() {
             placeholder="How other readers see you"
             icon={<UserIcon />}
             value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
+            onChange={(event) => {
+              setDisplayName(event.target.value);
+              setFieldErrors((current) => ({ ...current, displayName: undefined }));
+            }}
             error={fieldErrors.displayName}
             maxLength={40}
           />
@@ -79,7 +82,10 @@ export default function Register() {
             placeholder="you@university.edu"
             icon={<MailIcon />}
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setFieldErrors((current) => ({ ...current, email: undefined }));
+            }}
             error={fieldErrors.email}
             hint="Only you can see your email."
           />
@@ -91,7 +97,10 @@ export default function Register() {
             placeholder="At least 8 characters"
             icon={<LockIcon />}
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setFieldErrors((current) => ({ ...current, password: undefined }));
+            }}
             error={fieldErrors.password}
             maxLength={128}
             trailing={

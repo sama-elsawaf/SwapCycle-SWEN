@@ -13,6 +13,8 @@ info:
     - Success bodies are `{ "data": ... }`. Failures are `{ "error": { "code", "message" } }`.
     - Authentication uses a short-lived signed token in the `sc_session` cookie
       (HttpOnly, Secure, SameSite=Lax). Clients must send credentials (`credentials: 'include'`).
+    - Sessions are revocable. Logging out, resetting the password or a change of role ends
+      every session of the account on every device; requests with an ended session get 401.
     - List endpoints are paginated with `page` (1-based) and `pageSize` (max 50).
 servers:
   - url: /api
@@ -82,9 +84,13 @@ paths:
   /auth/logout:
     post:
       tags: [auth]
-      summary: End the session (clears the cookie)
+      summary: End every session of the account and clear the cookie
+      description: |
+        Ends all of the account's sessions, on every device, not only this one. Sessions
+        ended this way get 401 from then on. Always answers 204, also without a cookie or
+        with a cookie whose session has already ended (that cookie cannot end newer sessions).
       responses:
-        '204': { description: Logged out. }
+        '204': { description: Logged out. The `sc_session` cookie is cleared. }
 
   /auth/me:
     get:
@@ -137,7 +143,10 @@ paths:
                 token: { type: string, minLength: 20, maxLength: 128 }
                 newPassword: { type: string, minLength: 8, maxLength: 128 }
       responses:
-        '204': { description: Password changed. The token can no longer be used. }
+        '204':
+          description: |
+            Password changed. The token can no longer be used, and every existing session
+            of the account has ended (old cookies get 401).
         '400':
           description: Invalid input, or the token is invalid, used or expired.
           content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
@@ -514,6 +523,9 @@ components:
       type: apiKey
       in: cookie
       name: sc_session
+      description: |
+        Signed, expiring session token. Rejected with 401 once the session has ended
+        (logout, password reset or role change).
 
   parameters:
     UserId:
