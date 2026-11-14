@@ -34,6 +34,8 @@ Modules and pages for the planned features exist as placeholders (`backend/src/m
 
 ## Getting started
 
+**New here?** Follow the step-by-step guide: [`docs/running-the-app.md`](docs/running-the-app.md). It covers installing the tools, cloning, settings, demo data, phones and troubleshooting. The short version:
+
 Needs [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running) and Node.js 20.19+ or 22.12+ (CI uses 22).
 
 1. **Settings.** Copy `.env.example` to `.env`, then set `SESSION_SECRET` (at least 32 random characters) and
@@ -54,7 +56,7 @@ Needs [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running
 4. **Frontend.** Open http://localhost:5173. Calls to `/api` are proxied to the backend.
    ```bash
    cd frontend
-   npm install
+   npm ci
    npm run dev
    ```
 
