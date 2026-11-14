@@ -85,3 +85,20 @@ point `scripts/api-probe.sh` at it, and check the container log for `AddressSani
 | Backend tests under ASan and UBSan | Pass, no reports |
 | Migrations 001–008 and seed on PostgreSQL 16 | Apply cleanly |
 | `api-smoke.sh` / `api-probe.sh` against the sanitized server | All checks pass, no sanitizer reports |
+
+## Phase 2 system check, 14 November 2026
+
+The whole app was run as a user would run it: `docker compose up` from `.env.example`, plus the dev seed and `npm run dev`.
+
+| Check | Result |
+|---|---|
+| Frontend clean install (`npm ci`), typecheck, 112 tests, build, `npm audit` | All pass, 0 vulnerabilities |
+| Backend CI build (Release, `-Werror`), 98 GoogleTests | Pass |
+| `api-smoke.sh` / `api-probe.sh` against the Compose stack | 78/78 and 79/79; no secrets in backend logs |
+| Browser, every page: register, onboarding, login, home, search, recent searches, book details, public profile, list a book with a photo, edit, withdraw/relist, My books, wish list (add, duplicate, remove, draft restore), profile, privacy, logout, unknown pages | All work; no JavaScript errors |
+| Local storage: recent searches, remembered filters, book and wish drafts survive reloads and are wiped on logout | Pass |
+| Phone width (375 px): no sideways scrolling on any page | Pass |
+
+Fixed during the check: form error messages stayed visible after the field was corrected; the Compose database port
+clashed with an existing PostgreSQL on 5432; Windows checkouts showed every file as modified because of line endings
+(`.gitattributes` added).

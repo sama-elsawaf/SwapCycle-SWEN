@@ -57,6 +57,12 @@ export default function AddWishItem() {
   function update(next: Partial<FormState>) {
     setEdited(true);
     setForm((current) => ({ ...current, ...next }));
+    // A fixed field should not keep showing its old error until the next submit.
+    setErrors((current) => {
+      const cleared = { ...current };
+      for (const key of Object.keys(next)) delete cleared[key as keyof WishItemErrors];
+      return cleared;
+    });
   }
 
   function chooseKind(next: WishItemKind) {

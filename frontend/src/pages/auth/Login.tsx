@@ -71,7 +71,10 @@ export default function Login() {
             placeholder="Email"
             icon={<MailIcon />}
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setFieldErrors((current) => ({ ...current, email: undefined }));
+            }}
             error={fieldErrors.email}
           />
           <Input
@@ -83,7 +86,10 @@ export default function Login() {
             placeholder="Password"
             icon={<LockIcon />}
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setFieldErrors((current) => ({ ...current, password: undefined }));
+            }}
             error={fieldErrors.password}
             trailing={
               <button

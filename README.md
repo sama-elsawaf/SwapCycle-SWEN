@@ -34,15 +34,40 @@ Modules and pages for the planned features exist as placeholders (`backend/src/m
 
 ## Getting started
 
-Needs Docker Desktop and Node.js 20.19+ or 22.12+ (CI uses 22).
+Needs [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running) and Node.js 20.19+ or 22.12+ (CI uses 22).
 
-```bash
-cp .env.example .env           # then set SESSION_SECRET (required) and the database password
-docker compose up --build      # PostgreSQL 16 + migrations + backend on http://localhost:8080
-cd frontend
-npm install
-npm run dev                    # http://localhost:5173, /api is proxied to the backend
-```
+1. **Settings.** Copy `.env.example` to `.env`, then set `SESSION_SECRET` (at least 32 random characters) and
+   `POSTGRES_PASSWORD`. The backend refuses to start without a secret.
+   ```bash
+   cp .env.example .env
+   ```
+2. **Database and API.** Starts PostgreSQL 16 (runs every migration on first start) and the backend on
+   http://localhost:8080. The first build takes a few minutes.
+   ```bash
+   docker compose up -d --build
+   ```
+3. **Demo data (optional).** Adds Sara, Ali, Noor and a moderator, all with the password `password123`, plus books and
+   wish lists that form a three-way swap. Local development only.
+   ```bash
+   docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < database/seeds/dev_seed.sql
+   ```
+4. **Frontend.** Open http://localhost:5173. Calls to `/api` are proxied to the backend.
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+Useful commands:
+
+| Task | Command |
+|---|---|
+| Backend logs | `docker compose logs -f backend` |
+| Stop everything (keeps data) | `docker compose down` |
+| Start again with an empty database (needed after pulling a new migration) | `docker compose down -v` then `docker compose up -d --build` |
+| Connect with psql or a GUI | `localhost:5433` (set `POSTGRES_HOST_PORT` in `.env` to change it) |
+
+Password reset emails are not sent yet. The backend only logs that a reset was requested.
 
 ## Testing
 

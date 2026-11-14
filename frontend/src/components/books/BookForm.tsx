@@ -92,6 +92,8 @@ export default function BookForm({
   const set = <K extends keyof BookFormValues>(key: K, value: BookFormValues[K]) => {
     setEdited(true);
     setValues((v) => ({ ...v, [key]: value }));
+    // A fixed field should not keep showing its old error until the next submit.
+    setErrors((current) => (current[key] ? { ...current, [key]: undefined } : current));
   };
 
   useEffect(() => {

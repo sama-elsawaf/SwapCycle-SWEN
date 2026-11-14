@@ -145,7 +145,10 @@ function ChooseNewPassword({ token }: { token: string }) {
           autoComplete="new-password"
           icon={<LockIcon />}
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            setErrors((current) => ({ ...current, password: undefined }));
+          }}
           error={errors.password}
           hint="At least 8 characters."
           maxLength={128}
@@ -157,7 +160,10 @@ function ChooseNewPassword({ token }: { token: string }) {
           autoComplete="new-password"
           icon={<LockIcon />}
           value={confirm}
-          onChange={(event) => setConfirm(event.target.value)}
+          onChange={(event) => {
+            setConfirm(event.target.value);
+            setErrors((current) => ({ ...current, confirm: undefined }));
+          }}
           error={errors.confirm}
           maxLength={128}
         />

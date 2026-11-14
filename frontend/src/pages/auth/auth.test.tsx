@@ -58,6 +58,14 @@ describe('Login', () => {
     expect(api.login).not.toHaveBeenCalled();
   });
 
+  it('clears a field error as soon as the reader fixes that field', async () => {
+    renderAt('/login');
+    await userEvent.click(screen.getByRole('button', { name: 'Log In' }));
+    await userEvent.type(screen.getByPlaceholderText('Email'), 's');
+    expect(screen.queryByText('Enter your email address.')).not.toBeInTheDocument();
+    expect(screen.getByText('Enter your password.')).toBeInTheDocument();
+  });
+
   it('shows the generic server message on bad credentials', async () => {
     api.login.mockRejectedValue(apiError(401, 'UNAUTHORIZED', 'Invalid email or password'));
     renderAt('/login');
