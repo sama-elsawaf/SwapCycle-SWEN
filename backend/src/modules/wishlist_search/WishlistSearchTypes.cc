@@ -23,6 +23,10 @@ Json::Value toJson(const std::optional<std::string>& value) {
 
 }  // namespace
 
+bool isPriority(std::string_view value) {
+    return value == priority_level::kHigh || value == priority_level::kMedium || value == priority_level::kLow;
+}
+
 Json::Value toJson(const WishItem& item) {
     Json::Value json;
     json["id"] = item.id;
@@ -32,6 +36,9 @@ Json::Value toJson(const WishItem& item) {
     json["genre"] = toJson(item.details.genre);
     json["language"] = toJson(item.details.language);
     json["minCondition"] = toJson(item.details.minCondition);
+    json["priority"] = item.details.priority;
+    json["fulfilled"] = item.fulfilledAt.has_value();
+    json["fulfilledAt"] = toJson(item.fulfilledAt);
     json["createdAt"] = item.createdAt;
     return json;
 }
@@ -45,7 +52,24 @@ WishItemInput parseWishItemInput(const Json::Value& body) {
     input.genre = optionalString(body, "genre");
     input.language = optionalString(body, "language");
     input.minCondition = optionalString(body, "minCondition");
+    input.priority = optionalString(body, "priority").value_or(std::string(priority_level::kMedium));
     return input;
+}
+
+WishItemUpdate parseWishItemUpdate(const Json::Value& body) {
+    if (!body.isObject()) throw ApiError(ErrorCode::ValidationFailed, "Expected a JSON object body.");
+    WishItemUpdate update;
+    update.priority = optionalString(body, "priority");
+    if (body.isMember("fulfilled") && !body["fulfilled"].isNull()) {
+        if (!body["fulfilled"].isBool()) {
+            throw ApiError(ErrorCode::ValidationFailed, "Field 'fulfilled' must be true or false.");
+        }
+        update.fulfilled = body["fulfilled"].asBool();
+    }
+    if (!update.priority && !update.fulfilled) {
+        throw ApiError(ErrorCode::ValidationFailed, "Send a priority, fulfilled, or both.");
+    }
+    return update;
 }
 
 }  // namespace swapcycle::wishlist_search

@@ -100,5 +100,62 @@ TEST_F(WishlistSearchServiceTest, CannotRemoveSomeoneElsesEntry) {
     EXPECT_TRUE(drogon::sync_wait(service->listWishItems(kUser)).empty());
 }
 
+TEST_F(WishlistSearchServiceTest, NewEntriesDefaultToMediumPriority) {
+    const auto item = drogon::sync_wait(service->addWishItem(kUser, titleWish("Dune")));
+    EXPECT_EQ(item.details.priority, "MEDIUM");
+    EXPECT_FALSE(item.fulfilledAt);
+    EXPECT_EQ(toJson(item)["fulfilled"].asBool(), false);
+
+    auto urgent = titleWish("Emma");
+    urgent.priority = "HIGH";
+    EXPECT_EQ(drogon::sync_wait(service->addWishItem(kUser, urgent)).details.priority, "HIGH");
+
+    auto bad = titleWish("Circe");
+    bad.priority = "URGENT";
+    expectApiError(service->addWishItem(kUser, bad), ErrorCode::ValidationFailed);
+}
+
+TEST_F(WishlistSearchServiceTest, ChangesPriorityAndTogglesGotIt) {
+    const auto item = drogon::sync_wait(service->addWishItem(kUser, titleWish("Dune")));
+
+    const auto ranked = drogon::sync_wait(service->updateWishItem(kUser, item.id, WishItemUpdate{"LOW", std::nullopt}));
+    EXPECT_EQ(ranked.details.priority, "LOW");
+    EXPECT_FALSE(ranked.fulfilledAt);
+
+    const auto found = drogon::sync_wait(service->updateWishItem(kUser, item.id, WishItemUpdate{std::nullopt, true}));
+    ASSERT_TRUE(found.fulfilledAt);
+    EXPECT_EQ(found.details.priority, "LOW");
+    EXPECT_TRUE(toJson(found)["fulfilled"].asBool());
+
+    // Ticking again keeps the original time; unticking makes it wanted again.
+    const auto again = drogon::sync_wait(service->updateWishItem(kUser, item.id, WishItemUpdate{std::nullopt, true}));
+    EXPECT_EQ(again.fulfilledAt, found.fulfilledAt);
+    const auto reopened =
+        drogon::sync_wait(service->updateWishItem(kUser, item.id, WishItemUpdate{std::nullopt, false}));
+    EXPECT_FALSE(reopened.fulfilledAt);
+}
+
+TEST_F(WishlistSearchServiceTest, RejectsBadUpdates) {
+    const auto item = drogon::sync_wait(service->addWishItem(kUser, titleWish("Dune")));
+    expectApiError(service->updateWishItem(kUser, item.id, WishItemUpdate{}), ErrorCode::ValidationFailed);
+    expectApiError(service->updateWishItem(kUser, item.id, WishItemUpdate{"urgent", std::nullopt}),
+                   ErrorCode::ValidationFailed);
+    // Someone else's entry looks exactly like a missing one.
+    expectApiError(service->updateWishItem(kOther, item.id, WishItemUpdate{std::nullopt, true}), ErrorCode::NotFound);
+}
+
+TEST(WishItemJson, ParsesUpdates) {
+    Json::Value body;
+    body["fulfilled"] = true;
+    const auto update = parseWishItemUpdate(body);
+    EXPECT_EQ(update.fulfilled, true);
+    EXPECT_FALSE(update.priority);
+
+    Json::Value wrongType;
+    wrongType["fulfilled"] = "yes";
+    EXPECT_THROW(parseWishItemUpdate(wrongType), common::ApiError);
+    EXPECT_THROW(parseWishItemUpdate(Json::Value(Json::objectValue)), common::ApiError);
+}
+
 }  // namespace
 }  // namespace swapcycle::wishlist_search

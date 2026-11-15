@@ -164,14 +164,16 @@ describe('drafts', () => {
   });
 
   it('cleans a stored wish draft', () => {
-    expect(sanitizeWishDraft({ kind: 'INTEREST', genre: 'MYSTERY', language: 'EN!' })).toEqual({
+    expect(sanitizeWishDraft({ kind: 'INTEREST', genre: 'MYSTERY', language: 'EN!', priority: 'URGENT' })).toEqual({
       kind: 'INTEREST',
       title: '',
       author: '',
       genre: 'MYSTERY',
       language: '',
       minCondition: '',
+      priority: 'MEDIUM',
     });
+    expect(sanitizeWishDraft({ kind: 'TITLE', title: 'Emma', priority: 'HIGH' })?.priority).toBe('HIGH');
     expect(sanitizeWishDraft({ kind: 'TITLE' })).toBeUndefined();
   });
 

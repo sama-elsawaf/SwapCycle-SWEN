@@ -24,12 +24,15 @@ public:
     ADD_METHOD_TO(WishlistSearchController::add, "/api/wishlist", drogon::Post, "AuthFilter");
     ADD_METHOD_VIA_REGEX(WishlistSearchController::remove, "/api/wishlist/(" SWAPCYCLE_UUID_RE ")", drogon::Delete,
                          "AuthFilter");
+    ADD_METHOD_VIA_REGEX(WishlistSearchController::update, "/api/wishlist/(" SWAPCYCLE_UUID_RE ")", drogon::Patch,
+                         "AuthFilter");
     ADD_METHOD_TO(WishlistSearchController::searchBooks, "/api/search/books", drogon::Get);
     METHOD_LIST_END
 
     drogon::Task<drogon::HttpResponsePtr> list(drogon::HttpRequestPtr req);
     drogon::Task<drogon::HttpResponsePtr> add(drogon::HttpRequestPtr req);
     drogon::Task<drogon::HttpResponsePtr> remove(drogon::HttpRequestPtr req, std::string wishItemId);
+    drogon::Task<drogon::HttpResponsePtr> update(drogon::HttpRequestPtr req, std::string wishItemId);
     drogon::Task<drogon::HttpResponsePtr> searchBooks(drogon::HttpRequestPtr req);
 
 private:

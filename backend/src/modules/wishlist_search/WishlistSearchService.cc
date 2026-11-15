@@ -38,6 +38,7 @@ WishItemInput WishlistSearchService::validated(WishItemInput input) {
         invalid("Language must be a two-letter code such as 'en'.");
     }
     if (input.minCondition && !catalog::conditionRank(*input.minCondition)) invalid("Unknown condition.");
+    if (!isPriority(input.priority)) invalid("Priority must be HIGH, MEDIUM or LOW.");
     return input;
 }
 
@@ -59,6 +60,15 @@ drogon::Task<WishItem> WishlistSearchService::addWishItem(std::string userId, Wi
 drogon::Task<void> WishlistSearchService::removeWishItem(std::string userId, std::string wishItemId) {
     const bool removed = co_await repository_->deleteForUser(std::move(userId), std::move(wishItemId));
     if (!removed) throw ApiError(ErrorCode::NotFound, "Wish list entry not found.");
+}
+
+drogon::Task<WishItem> WishlistSearchService::updateWishItem(std::string userId, std::string wishItemId,
+                                                            WishItemUpdate update) {
+    if (!update.priority && !update.fulfilled) invalid("Send a priority, fulfilled, or both.");
+    if (update.priority && !isPriority(*update.priority)) invalid("Priority must be HIGH, MEDIUM or LOW.");
+    auto item = co_await repository_->updateForUser(std::move(userId), std::move(wishItemId), std::move(update));
+    if (!item) throw ApiError(ErrorCode::NotFound, "Wish list entry not found.");
+    co_return std::move(*item);
 }
 
 drogon::Task<catalog::Page<catalog::ListingView>> WishlistSearchService::searchBooks(catalog::SearchFilters filters) {

@@ -89,6 +89,15 @@ check "wish duplicate 409" "$(code -b jar1 -H "$J" -d '{"kind":"TITLE","title":"
 check "wish interest" "$(code -b jar1 -H "$J" -d '{"kind":"INTEREST","genre":"TRAVEL"}' $B/wishlist)" 201
 check "wish bad 400" "$(code -b jar1 -H "$J" -d '{"kind":"INTEREST","title":"x"}' $B/wishlist)" 400
 check "wish list" "$(code -b jar1 $B/wishlist; field "len(d['data'])")" "2002"
+check "wish default priority" "$(code -b jar1 $B/wishlist; field "[w['priority'] for w in d['data']]")" "200['MEDIUM', 'MEDIUM']"
+check "wish set priority" "$(code -b jar1 -X PATCH -H "$J" -d '{"priority":"HIGH"}' $B/wishlist/$WID; field "(d['data']['priority'], d['data']['fulfilled'])")" "200('HIGH', False)"
+check "wish got it" "$(code -b jar1 -X PATCH -H "$J" -d '{"fulfilled":true}' $B/wishlist/$WID; field "(d['data']['fulfilled'], d['data']['fulfilledAt'] is not None)")" "200(True, True)"
+check "wish found sorts last" "$(code -b jar1 $B/wishlist; field "[(w['genre'] or w['title'], w['fulfilled']) for w in d['data']]")" "200[('TRAVEL', False), ('Dune', True)]"
+check "wish untick" "$(code -b jar1 -X PATCH -H "$J" -d '{"fulfilled":false}' $B/wishlist/$WID; field "d['data']['fulfilledAt']")" "200None"
+check "wish high sorts first" "$(code -b jar1 $B/wishlist; field "[w['genre'] or w['title'] for w in d['data']]")" "200['Dune', 'TRAVEL']"
+check "wish bad priority 400" "$(code -b jar1 -X PATCH -H "$J" -d '{"priority":"URGENT"}' $B/wishlist/$WID)" 400
+check "wish empty update 400" "$(code -b jar1 -X PATCH -H "$J" -d '{}' $B/wishlist/$WID)" 400
+check "ali cannot update sara wish" "$(code -b jar2 -X PATCH -H "$J" -d '{"fulfilled":true}' $B/wishlist/$WID)" 404
 check "ali cannot delete sara wish" "$(code -b jar2 -X DELETE $B/wishlist/$WID)" 404
 check "delete wish" "$(code -b jar1 -X DELETE $B/wishlist/$WID)" 204
 check "delete book" "$(code -b jar1 -X DELETE $B/books/$ID)" 204

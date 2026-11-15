@@ -1,5 +1,5 @@
-import type { BookCondition, Genre, WishItemKind } from '../types';
-import { CONDITIONS, GENRES, LIMITS } from './constants';
+import type { BookCondition, Genre, WishItemKind, WishPriority } from '../types';
+import { CONDITIONS, GENRES, LIMITS, WISH_PRIORITY_OPTIONS } from './constants';
 import { readStored, removeStored, writeStored, type StorageKey } from './storage';
 import { isLanguageCode } from './validation';
 
@@ -101,6 +101,7 @@ export interface WishDraft {
   genre: Genre | '';
   language: string;
   minCondition: BookCondition | '';
+  priority: WishPriority;
 }
 
 export function wishDraftHasContent(draft: WishDraft): boolean {
@@ -116,6 +117,7 @@ export function sanitizeWishDraft(values: unknown): WishDraft | undefined {
     genre: oneOf(values.genre, GENRES) ?? '',
     language: typeof values.language === 'string' && isLanguageCode(values.language) ? values.language : '',
     minCondition: oneOf(values.minCondition, CONDITIONS) ?? '',
+    priority: oneOf(values.priority, WISH_PRIORITY_OPTIONS) ?? 'MEDIUM',
   };
   return wishDraftHasContent(draft) ? draft : undefined;
 }

@@ -18,7 +18,7 @@ SwapCycle makes matching, agreement, and handover visible to everyone involved.
 |---|---|
 | Accounts: register, log in/out, password reset, onboarding, profile, privacy | Done (backend + frontend) |
 | Book listings: create, edit, withdraw/relist, delete, photos | Done |
-| Wish lists and search with filters | Done |
+| Wish lists (priority High/Medium/Low, "Got it" completion toggle) and search with filters | Done |
 | Local storage: recent searches, remembered filters, form drafts | Done (cleared on logout) |
 | Direct offers, matching (2- and 3-way cycles), reservations | Planned (Sprint 2) |
 | Handover, messaging, notifications, reviews, disputes, moderation | Planned (Sprints 2–3) |

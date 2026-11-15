@@ -6,8 +6,8 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import { useAuth } from '../../hooks/useAuth';
 import { useDraft } from '../../hooks/useDraft';
-import type { BookCondition, Genre, WishItemInput, WishItemKind } from '../../types';
-import { CONDITIONS, GENRES, LANGUAGES, LIMITS } from '../../utils/constants';
+import type { BookCondition, Genre, WishItemInput, WishItemKind, WishPriority } from '../../types';
+import { CONDITIONS, GENRES, LANGUAGES, LIMITS, WISH_PRIORITY_OPTIONS } from '../../utils/constants';
 import { sanitizeWishDraft, wishDraftHasContent } from '../../utils/drafts';
 import { errorMessage } from '../../utils/errors';
 import { STORAGE_KEYS } from '../../utils/storage';
@@ -16,7 +16,7 @@ import { Alert, BackLink, PageHeading, SelectField } from '../PageParts';
 
 /** Only the fields that belong to the chosen kind are sent. Call after validation. */
 function toInput(kind: WishItemKind, form: FormState): WishItemInput {
-  const shared = { language: form.language || null, minCondition: form.minCondition || null };
+  const shared = { language: form.language || null, minCondition: form.minCondition || null, priority: form.priority };
   return kind === 'TITLE'
     ? { kind, title: form.title.trim(), author: form.author.trim() || undefined, ...shared }
     : { kind, genre: form.genre as Genre, ...shared };
@@ -28,9 +28,10 @@ interface FormState {
   genre: Genre | '';
   language: string;
   minCondition: BookCondition | '';
+  priority: WishPriority;
 }
 
-const EMPTY_FORM: FormState = { title: '', author: '', genre: '', language: '', minCondition: '' };
+const EMPTY_FORM: FormState = { title: '', author: '', genre: '', language: '', minCondition: '', priority: 'MEDIUM' };
 const draftOptions = { sanitize: sanitizeWishDraft, hasContent: wishDraftHasContent };
 
 export default function AddWishItem() {
@@ -192,6 +193,35 @@ export default function AddWishItem() {
             </option>
           ))}
         </SelectField>
+
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium text-navy">Priority</legend>
+          <div className="grid grid-cols-3 gap-2">
+            {WISH_PRIORITY_OPTIONS.map((option) => (
+              <label
+                key={option.value}
+                className={
+                  'flex cursor-pointer flex-col items-center rounded-card border px-2 py-2 text-center ' +
+                  'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-rose-deep ' +
+                  (form.priority === option.value ? 'border-navy bg-navy text-white' : 'border-soft bg-white text-navy')
+                }
+              >
+                <input
+                  type="radio"
+                  name="priority"
+                  value={option.value}
+                  checked={form.priority === option.value}
+                  onChange={() => update({ priority: option.value })}
+                  className="sr-only"
+                />
+                <span className="font-semibold">{option.label}</span>
+                <span className={`text-xs ${form.priority === option.value ? 'text-white' : 'text-slate'}`}>
+                  {option.hint}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <Button type="submit" variant="primary" fullWidth loading={submitting} disabled={submitting}>
           Add to wish list
