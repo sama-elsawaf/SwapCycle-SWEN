@@ -1,4 +1,4 @@
-import type { BookCondition, Genre, InterestCategory } from '../types';
+import type { BookCondition, Genre, InterestCategory, WishPriority } from '../types';
 
 // Option lists shared by forms and filters. Values match the API enums in
 // docs/api/openapi.yaml; labels are what readers see.
@@ -40,6 +40,13 @@ export const CONDITIONS: ReadonlyArray<{ value: BookCondition; label: string; hi
   { value: 'GOOD', label: 'Good', hint: 'Light wear, all pages intact' },
   { value: 'FAIR', label: 'Fair', hint: 'Noticeable wear or notes' },
   { value: 'POOR', label: 'Poor', hint: 'Heavy wear but readable' },
+];
+
+// Highest first, as the wish list is sorted.
+export const WISH_PRIORITY_OPTIONS: ReadonlyArray<{ value: WishPriority; label: string; hint: string }> = [
+  { value: 'HIGH', label: 'High', hint: 'I really want this' },
+  { value: 'MEDIUM', label: 'Medium', hint: 'Would be nice' },
+  { value: 'LOW', label: 'Low', hint: 'Someday' },
 ];
 
 // Common languages on campus; any ISO 639-1 code is accepted by the API.

@@ -442,7 +442,10 @@ paths:
       security: [{ sessionCookie: [] }]
       responses:
         '200':
-          description: Your wish list entries, newest first.
+          description: |
+            Your wish list. Entries you are still looking for come first, ordered
+            HIGH, MEDIUM, LOW priority and then newest; entries marked "Got it"
+            (fulfilled) follow, most recently found first.
           content:
             application/json:
               schema:
@@ -486,6 +489,37 @@ paths:
           schema: { type: string, format: uuid }
       responses:
         '204': { description: Removed. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [wishlist]
+      summary: Change an entry's priority, or mark it found ("Got it") or still wanted
+      description: |
+        Send `priority`, `fulfilled`, or both. `fulfilled: true` records when the
+        book was found (ticking an already-found entry keeps the original time);
+        `fulfilled: false` makes it wanted again. Only your own entries; anyone
+        else's answers 404.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - name: wishItemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WishItemUpdate' }
+      responses:
+        '200':
+          description: The updated entry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties: { data: { $ref: '#/components/schemas/WishItem' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -761,10 +795,26 @@ components:
         minCondition:
           nullable: true
           allOf: [{ $ref: '#/components/schemas/BookCondition' }]
+        priority:
+          allOf: [{ $ref: '#/components/schemas/WishPriority' }]
+          description: Defaults to MEDIUM.
+
+    WishPriority:
+      type: string
+      enum: [HIGH, MEDIUM, LOW]
+
+    WishItemUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        priority: { $ref: '#/components/schemas/WishPriority' }
+        fulfilled:
+          type: boolean
+          description: true = "Got it" (found); false = still wanted.
 
     WishItem:
       type: object
-      required: [id, kind, title, author, genre, language, minCondition, createdAt]
+      required: [id, kind, title, author, genre, language, minCondition, priority, fulfilled, fulfilledAt, createdAt]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: '#/components/schemas/WishItemKind' }
@@ -777,4 +827,7 @@ components:
         minCondition:
           nullable: true
           allOf: [{ $ref: '#/components/schemas/BookCondition' }]
+        priority: { $ref: '#/components/schemas/WishPriority' }
+        fulfilled: { type: boolean, description: True once marked "Got it". }
+        fulfilledAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }

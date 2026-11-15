@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addWishItem, listWishItems, removeWishItem } from './wishlist';
+import { addWishItem, listWishItems, removeWishItem, updateWishItem } from './wishlist';
 import { callAt, errorBody, jsonResponse, mockFetch } from './testUtils';
 
 afterEach(() => {
@@ -49,5 +49,16 @@ describe('wishlist', () => {
     const { url, init } = callAt(fetchMock);
     expect(url).toBe('/api/wishlist/w1');
     expect(init.method).toBe('DELETE');
+  });
+
+  it('changes priority and marks an entry found', async () => {
+    const fetchMock = mockFetch(jsonResponse(200, { data: { id: 'w1', priority: 'HIGH', fulfilled: true } }));
+    await expect(updateWishItem('w1', { priority: 'HIGH', fulfilled: true })).resolves.toMatchObject({
+      fulfilled: true,
+    });
+    const { url, init } = callAt(fetchMock);
+    expect(url).toBe('/api/wishlist/w1');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body as string)).toEqual({ priority: 'HIGH', fulfilled: true });
   });
 });

@@ -199,6 +199,9 @@ export interface BookSearchParams extends PageParams {
 
 export type WishItemKind = 'TITLE' | 'INTEREST';
 
+export const WISH_PRIORITIES = ['HIGH', 'MEDIUM', 'LOW'] as const;
+export type WishPriority = (typeof WISH_PRIORITIES)[number];
+
 /** TITLE needs a title (author optional). INTEREST needs a genre and no title. */
 export type WishItemInput =
   | {
@@ -207,13 +210,23 @@ export type WishItemInput =
       author?: string;
       language?: LanguageCode | null;
       minCondition?: BookCondition | null;
+      /** Defaults to MEDIUM on the server. */
+      priority?: WishPriority;
     }
   | {
       kind: 'INTEREST';
       genre: Genre;
       language?: LanguageCode | null;
       minCondition?: BookCondition | null;
+      priority?: WishPriority;
     };
+
+/** PATCH /wishlist/{id}: send at least one field. */
+export interface WishItemUpdate {
+  priority?: WishPriority;
+  /** true = "Got it" (found); false = still wanted. */
+  fulfilled?: boolean;
+}
 
 export interface WishItem {
   id: string;
@@ -223,5 +236,9 @@ export interface WishItem {
   genre: Genre | null;
   language: LanguageCode | null;
   minCondition: BookCondition | null;
+  priority: WishPriority;
+  /** True once the reader marked it "Got it". */
+  fulfilled: boolean;
+  fulfilledAt: string | null;
   createdAt: string;
 }

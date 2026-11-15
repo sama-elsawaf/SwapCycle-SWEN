@@ -1,5 +1,5 @@
-import type { BookCondition, CopyStatus, Genre, InterestCategory } from '../types';
-import { CONDITIONS, GENRES, INTEREST_CATEGORIES, LANGUAGES } from './constants';
+import type { BookCondition, CopyStatus, Genre, InterestCategory, WishItem, WishPriority } from '../types';
+import { CONDITIONS, GENRES, INTEREST_CATEGORIES, LANGUAGES, WISH_PRIORITY_OPTIONS } from './constants';
 
 export function genreLabel(genre: Genre | null | undefined): string {
   return GENRES.find((option) => option.value === genre)?.label ?? 'Other';
@@ -50,4 +50,23 @@ export function pluralize(count: number, singular: string, plural = `${singular}
 export function bookTitleLine(book: { title: string; author: string; edition?: string | null }): string {
   const edition = book.edition ? ` (${book.edition})` : '';
   return `${book.title} by ${book.author}${edition}`;
+}
+
+export function priorityLabel(priority: WishPriority): string {
+  return WISH_PRIORITY_OPTIONS.find((option) => option.value === priority)?.label ?? 'Medium';
+}
+
+const PRIORITY_RANK: Record<WishPriority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+
+/**
+ * The server's wish list order, for keeping the list sorted after a local change:
+ * still wanted first (HIGH, MEDIUM, LOW, then newest), then found (most recently found first).
+ */
+export function sortWishItems(items: readonly WishItem[]): WishItem[] {
+  return [...items].sort((a, b) => {
+    if (a.fulfilled !== b.fulfilled) return a.fulfilled ? 1 : -1;
+    if (a.fulfilled && b.fulfilled) return (b.fulfilledAt ?? '').localeCompare(a.fulfilledAt ?? '');
+    const byPriority = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+    return byPriority !== 0 ? byPriority : b.createdAt.localeCompare(a.createdAt);
+  });
 }

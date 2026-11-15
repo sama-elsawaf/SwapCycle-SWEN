@@ -267,7 +267,7 @@ public:
                 co_return std::nullopt;
             }
         }
-        wishlist_search::WishItem item{fakeId(nextId++), input, "2026-11-05T10:00:00Z"};
+        wishlist_search::WishItem item{fakeId(nextId++), input, "2026-11-05T10:00:00Z", std::nullopt};
         items.emplace_back(userId, item);
         co_return item;
     }
@@ -278,6 +278,27 @@ public:
         if (it == items.end()) co_return false;
         items.erase(it);
         co_return true;
+    }
+    int nextFulfilledSecond = 0;
+    drogon::Task<std::optional<wishlist_search::WishItem>> updateForUser(
+        std::string userId, std::string wishItemId, wishlist_search::WishItemUpdate update) override {
+        // Plain loop: GCC 11 mis-compiles structured bindings in coroutines.
+        for (auto& entry : items) {
+            auto& item = entry.second;
+            if (entry.first != userId || item.id != wishItemId) continue;
+            if (update.priority) item.details.priority = *update.priority;
+            if (update.fulfilled) {
+                if (!*update.fulfilled) {
+                    item.fulfilledAt.reset();
+                } else if (!item.fulfilledAt) {
+                    const int second = nextFulfilledSecond++;
+                    item.fulfilledAt =
+                        "2026-11-15T10:00:" + std::string(second < 10 ? "0" : "") + std::to_string(second) + "Z";
+                }
+            }
+            co_return item;
+        }
+        co_return std::nullopt;
     }
 };
 

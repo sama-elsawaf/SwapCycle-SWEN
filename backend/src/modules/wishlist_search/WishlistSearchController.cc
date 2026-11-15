@@ -90,6 +90,17 @@ drogon::Task<HttpResponsePtr> WishlistSearchController::remove(HttpRequestPtr re
     }
 }
 
+drogon::Task<HttpResponsePtr> WishlistSearchController::update(HttpRequestPtr req, std::string wishItemId) {
+    try {
+        const auto userId = currentUserId(req);
+        const auto item =
+            co_await service_->updateWishItem(userId, std::move(wishItemId), parseWishItemUpdate(jsonBody(req)));
+        co_return common::dataResponse(toJson(item));
+    } catch (const std::exception& error) {
+        co_return common::errorResponse(error);
+    }
+}
+
 drogon::Task<HttpResponsePtr> WishlistSearchController::searchBooks(HttpRequestPtr req) {
     try {
         const auto results = co_await service_->searchBooks(filtersFrom(req));

@@ -22,6 +22,8 @@ public:
     drogon::Task<std::vector<WishItem>> listWishItems(std::string userId);
     drogon::Task<WishItem> addWishItem(std::string userId, WishItemInput input);
     drogon::Task<void> removeWishItem(std::string userId, std::string wishItemId);
+    // Change the priority and/or mark the entry found ("Got it") or still wanted.
+    drogon::Task<WishItem> updateWishItem(std::string userId, std::string wishItemId, WishItemUpdate update);
 
     // Search reads listings through CatalogService, never the catalog tables.
     drogon::Task<catalog::Page<catalog::ListingView>> searchBooks(catalog::SearchFilters filters);

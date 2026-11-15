@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { BOOK_CONDITIONS, GENRES as API_GENRES, INTEREST_CATEGORIES as API_INTERESTS } from '../api/types';
+import { BOOK_CONDITIONS, GENRES as API_GENRES, INTEREST_CATEGORIES as API_INTERESTS, WISH_PRIORITIES } from '../api/types';
+import type { WishItem } from '../types';
 import type { BookInput } from '../types';
-import { CONDITIONS, GENRES, INTEREST_CATEGORIES } from './constants';
+import { CONDITIONS, GENRES, INTEREST_CATEGORIES, WISH_PRIORITY_OPTIONS } from './constants';
 import { errorMessage, isUnauthorized } from './errors';
-import { bookTitleLine, conditionLabel, formatDate, genreLabel, languageName, pluralize } from './format';
+import {
+  bookTitleLine,
+  conditionLabel,
+  formatDate,
+  genreLabel,
+  languageName,
+  pluralize,
+  priorityLabel,
+  sortWishItems,
+} from './format';
 import { homeFor, safeRedirectPath } from './navigation';
 import { filtersFromParams, paramsFromFilters } from './searchParams';
 import { apiError } from './testHelpers';
@@ -146,5 +156,40 @@ describe('option lists', () => {
     expect(GENRES.map((option) => option.value)).toEqual([...API_GENRES]);
     expect(INTEREST_CATEGORIES.map((option) => option.value)).toEqual([...API_INTERESTS]);
     expect(CONDITIONS.map((option) => option.value)).toEqual([...BOOK_CONDITIONS]);
+    expect(WISH_PRIORITY_OPTIONS.map((option) => option.value)).toEqual([...WISH_PRIORITIES]);
+  });
+});
+
+describe('wish list order', () => {
+  const wish = (id: string, overrides: Partial<WishItem>): WishItem => ({
+    id,
+    kind: 'TITLE',
+    title: id,
+    author: null,
+    genre: null,
+    language: null,
+    minCondition: null,
+    priority: 'MEDIUM',
+    fulfilled: false,
+    fulfilledAt: null,
+    createdAt: '2026-11-01T10:00:00Z',
+    ...overrides,
+  });
+
+  it('puts wanted entries first by priority then newest, and found entries last', () => {
+    const sorted = sortWishItems([
+      wish('found-old', { fulfilled: true, fulfilledAt: '2026-11-02T10:00:00Z', priority: 'HIGH' }),
+      wish('low', { priority: 'LOW' }),
+      wish('medium-old', { createdAt: '2026-10-01T10:00:00Z' }),
+      wish('found-new', { fulfilled: true, fulfilledAt: '2026-11-09T10:00:00Z' }),
+      wish('high', { priority: 'HIGH' }),
+      wish('medium-new', { createdAt: '2026-11-05T10:00:00Z' }),
+    ]);
+    expect(sorted.map((item) => item.id)).toEqual(['high', 'medium-new', 'medium-old', 'low', 'found-new', 'found-old']);
+  });
+
+  it('labels priorities', () => {
+    expect(priorityLabel('HIGH')).toBe('High');
+    expect(priorityLabel('LOW')).toBe('Low');
   });
 });
